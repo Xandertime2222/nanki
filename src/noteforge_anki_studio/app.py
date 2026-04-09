@@ -32,6 +32,7 @@ from .models import (
     SaveNoteRequest,
     WorkspaceUpdateRequest,
 )
+from .stats import StatsService
 from .storage import WorkspaceStore, utc_now_iso
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -46,6 +47,10 @@ import_service = ImportService()
 exporter = CardExporter()
 anki_client = AnkiConnectClient(settings_manager)
 ai_service = AIService(settings_manager, anki_client)
+
+# Initialize stats service
+data_dir = Path(settings_manager.load().workspace_path) / ".nanki" if settings_manager.load().workspace_path else Path.home() / ".nanki"
+stats_service = StatsService(data_dir)
 
 app = FastAPI(title="Nanki")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
@@ -442,3 +447,25 @@ async def push_cards_to_anki(note_id: str, payload: AnkiPushRequest) -> dict:
         "sync_triggered": result.sync_triggered,
         "version": result.version,
     }
+
+
+@app.get("/api/stats/dashboard")
+async def get_stats_dashboard() -> dict:
+    """Get learning statistics dashboard data."""
+    notes = store.list_notes()
+    note_documents = [store.load_note(note.meta.id) for note in notes]
+    return stats_service.get_dashboard_data(note_documents)
+
+
+@app.post("/api/stats/session/start")
+async def start_study_session() -> dict:
+    """Start a new study session."""
+    session = stats_service.stats.start_session()
+    return {"started_at": session.started_at}
+
+
+@app.post("/api/stats/session/end")
+async def end_study_session() -> dict:
+    """End current study session."""
+    stats_service.stats.end_session()
+    return {"status": "ended"}

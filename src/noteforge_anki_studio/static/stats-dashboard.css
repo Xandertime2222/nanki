@@ -1,0 +1,168 @@
+/* Learning Statistics Dashboard Styles */
+
+.stats-dashboard {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 420px;
+  height: 100vh;
+  background: var(--card-bg, #ffffff);
+  border-left: 1px solid var(--border-color, #e5e5e5);
+  z-index: 100;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+@media (prefers-color-scheme: dark) {
+  .stats-dashboard {
+    background: var(--card-bg, #18181b);
+    border-left-color: var(--border-color, #27272a);
+  }
+}
+
+.stats-dashboard.hidden {
+  display: none !important;
+}
+
+.stats-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color, #e5e5e5);
+}
+
+.stats-header h2 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.stats-content {
+  flex: 1;
+  padding: 20px;
+}
+
+/* Stat Cards Grid */
+.stats-grid {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.stats-grid.overview {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.stats-grid.periods {
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.stat-card {
+  background: var(--surface-bg, #fafafa);
+  border-radius: 12px;
+  padding: 16px;
+  text-align: center;
+  border: 1px solid var(--border-color, #e5e5e5);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+@media (prefers-color-scheme: dark) {
+  .stat-card {
+    background: var(--surface-bg, #27272a);
+    border-color: var(--border-color, #3f3f46);
+  }
+}
+
+.stat-card.primary {
+  padding: 20px;
+}
+
+.stat-card.primary .stat-icon {
+  font-size: 2rem;
+  margin-bottom: 8px;
+}
+
+.stat-card.primary .stat-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--primary-color, #6c3ff4);
+}
+
+.stat-value {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-primary, #18181b);
+  line-height: 1.2;
+}
+
+.stat-label {
+  font-size: 0.75rem;
+  color: var(--text-muted, #71717a);
+  margin-top: 4px;
+}
+
+/* Section Headers */
+.stats-section {
+  margin-bottom: 24px;
+}
+
+.stats-section h3 {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-muted, #71717a);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0 0 12px 0;
+}
+
+/* Study Session */
+.session-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.session-timer {
+  font-family: monospace;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--primary-color, #6c3ff4);
+  padding: 8px 12px;
+  background: var(--surface-bg, #fafafa);
+  border-radius: 8px;
+}
+
+.session-stats {
+  padding: 12px;
+  background: var(--surface-bg, #fafafa);
+  border-radius: 8px;
+  font-size: 0.875rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  .session-stats {
+    background: var(--surface-bg, #27272a);
+  }
+}
+
+/* Quick Actions */
+.stats-actions {
+  display: flex;
+  justify-content: center;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color, #e5e5e5);
+}
+
+/* Utility Classes */
+.hidden {
+  display: none !important;
+}
