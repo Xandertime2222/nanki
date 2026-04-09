@@ -1,0 +1,99 @@
+name: Build Windows Desktop App
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e .
+        pip install pyinstaller pyinstaller-hooks-contrib pywebview
+        
+    - name: Build with PyInstaller (Desktop App)
+      run: |
+        pyinstaller --name Nanki --windowed --noconsole --paths src --add-data "src/noteforge_anki_studio/static;noteforge_anki_studio/static" --add-data "src/noteforge_anki_studio/templates;noteforge_anki_studio/templates" --hidden-import noteforge_anki_studio --hidden-import noteforge_anki_studio.ai --hidden-import noteforge_anki_studio.anki_connect --hidden-import noteforge_anki_studio.config --hidden-import noteforge_anki_studio.coverage --hidden-import noteforge_anki_studio.exporters --hidden-import noteforge_anki_studio.importers --hidden-import noteforge_anki_studio.models --hidden-import noteforge_anki_studio.prompts --hidden-import noteforge_anki_studio.storage --hidden-import noteforge_anki_studio.app --hidden-import webview --hidden-import webview.platforms.winforms --hidden-import uvicorn.logging --hidden-import uvicorn.loops.auto --hidden-import uvicorn.protocols.http.auto --hidden-import uvicorn.protocols.websockets.auto --hidden-import uvicorn.lifespan.on --collect-all uvicorn --collect-all starlette --collect-all fastapi --collect-all mistune --collect-all markdownify --collect-all httpx --collect-all pydantic --collect-all jinja2 --collect-all PyYAML --collect-all clr --collect-all System --collect-all System.Windows.Forms launcher_webview.py
+          
+    - name: Test executable exists
+      run: |
+        if (-not (Test-Path "dist/Nanki/Nanki.exe")) {
+          Write-Error "Nanki.exe not found!"
+          exit 1
+        }
+        Write-Host "Nanki.exe built successfully"
+        
+    - name: Install NSIS
+      run: choco install nsis -y
+      
+    - name: Create NSIS installer
+      shell: pwsh
+      run: |
+        $nsisContent = @'
+        !define PRODUCT_NAME "Nanki"
+        !define PRODUCT_VERSION "0.3.1"
+        !define PRODUCT_PUBLISHER "Nanki Project"
+        
+        Name "${PRODUCT_NAME}"
+        OutFile "Nanki-Desktop-Setup.exe"
+        InstallDir "$PROGRAMFILES64\Nanki"
+        RequestExecutionLevel admin
+        
+        !include "MUI2.nsh"
+        !insertmacro MUI_PAGE_WELCOME
+        !insertmacro MUI_PAGE_DIRECTORY
+        !insertmacro MUI_PAGE_INSTFILES
+        !define MUI_FINISHPAGE_RUN "$INSTDIR\Nanki.exe"
+        !insertmacro MUI_PAGE_FINISH
+        
+        !insertmacro MUI_LANGUAGE "English"
+        
+        Section "Install"
+          SetOutPath "$INSTDIR"
+          File /r "dist\Nanki\*.*"
+          CreateDirectory "$SMPROGRAMS\Nanki"
+          CreateShortcut "$SMPROGRAMS\Nanki\Nanki.lnk" "$INSTDIR\Nanki.exe"
+          CreateShortcut "$DESKTOP\Nanki.lnk" "$INSTDIR\Nanki.exe"
+          WriteUninstaller "$INSTDIR\Uninstall.exe"
+        SectionEnd
+        
+        Section "Uninstall"
+          Delete "$INSTDIR\Uninstall.exe"
+          Delete "$INSTDIR\Nanki.exe"
+          RMDir /r "$INSTDIR\_internal"
+          RMDir "$INSTDIR"
+          Delete "$DESKTOP\Nanki.lnk"
+          Delete "$SMPROGRAMS\Nanki\Nanki.lnk"
+          RMDir "$SMPROGRAMS\Nanki"
+        SectionEnd
+        '@
+        Set-Content -Path "build.nsi" -Value $nsisContent
+        & "C:\Program Files (x86)\NSIS\makensis.exe" build.nsi
+        
+    - name: Upload installer
+      uses: actions/upload-artifact@v4
+      with:
+        name: nanki-desktop
+        path: Nanki-Desktop-Setup.exe
+        
+    - name: Create Release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: Nanki-Desktop-Setup.exe
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
