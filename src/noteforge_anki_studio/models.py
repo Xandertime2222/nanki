@@ -209,7 +209,7 @@ class AIExplainRequest(BaseModel):
 class AIGenerateCardsRequest(BaseModel):
     note_id: str
     source_text: str = ""
-    target_count: int = 8
+    target_count: int | None = 8
     auto: bool = False
     model: str | None = None
     include_anki_coverage: bool | None = None

@@ -1645,6 +1645,69 @@ button .icon {
   background: rgba(168, 85, 247, 0.14);
 }
 
+/* Coverage hover tooltip */
+.coverage-hover-tooltip {
+  position: fixed;
+  z-index: 60;
+  max-width: 340px;
+  padding: 0.65rem 0.75rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-lg);
+  pointer-events: none;
+  animation: fadeIn 120ms var(--ease);
+}
+
+.coverage-hover-tooltip .coverage-tooltip-title {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-bottom: 0.4rem;
+}
+
+.coverage-hover-tooltip .coverage-tooltip-card {
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.8rem;
+}
+
+.coverage-hover-tooltip .coverage-tooltip-card:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.coverage-hover-tooltip .coverage-tooltip-card-type {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.coverage-hover-tooltip .coverage-tooltip-card-front {
+  font-weight: 500;
+  line-height: 1.4;
+  margin-top: 0.1rem;
+}
+
+.coverage-hover-tooltip .coverage-tooltip-card-back {
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.4;
+  margin-top: 0.15rem;
+}
+
+.editor-coverage-view .coverage-token.covered {
+  cursor: default;
+}
+
+.editor-coverage-view .coverage-token.covered:hover {
+  outline: 2px solid var(--accent-ring);
+  outline-offset: 1px;
+  border-radius: 3px;
+}
+
 .editor-coverage-empty {
   display: flex;
   flex-direction: column;
