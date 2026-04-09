@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ app_name }}</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+    <link rel="stylesheet" href="/static/ai.css" />
+  </head>
+  <body>
+    <div id="app-shell">
+      <aside class="sidebar">
+        <div class="sidebar-top">
+          <div class="brand-row">
+            <img class="brand-logo" src="/static/nanki-logo.svg" alt="Nanki logo" />
+            <div>
+              <h1>Nanki</h1>
+              <p class="muted" data-i18n="app.subtitle">Write notes. Select text. Build cards.</p>
+            </div>
+          </div>
+
+          <section class="card-surface sidebar-focus-card">
+            <div class="sidebar-focus-copy">
+              <span class="section-label" data-i18n="sidebar.focusLabel">Writing first</span>
+              <h2 data-i18n="sidebar.focusTitle">Create your own notes first</h2>
+              <p class="muted" data-i18n="sidebar.focusSubtitle">Nanki is built around writing. Import stays available when you need it.</p>
+            </div>
+            <div class="sidebar-actions main-actions">
+              <button id="new-note-btn" class="primary" data-i18n="sidebar.newNote">New note</button>
+              <button id="open-import-hub-btn" class="soft" data-i18n="sidebar.import">Import</button>
+            </div>
+          </section>
+
+          <div class="search-shell card-surface">
+            <input id="note-search" type="search" placeholder="Search notes, tags, deck" data-i18n-placeholder="sidebar.searchPlaceholder" />
+          </div>
+        </div>
+
+        <div class="sidebar-section grow">
+          <div class="section-row">
+            <span class="section-label" data-i18n="sidebar.notes">Notes</span>
+            <span id="note-count" class="muted">0</span>
+          </div>
+          <div id="note-list" class="note-list"></div>
+        </div>
+
+        <div class="sidebar-bottom sidebar-bottom-actions">
+          <button id="duplicate-note-btn" class="ghost" data-i18n="sidebar.duplicate">Duplicate</button>
+          <button id="delete-note-btn" class="ghost danger" data-i18n="sidebar.delete">Delete</button>
+        </div>
+      </aside>
+
+      <main class="workspace">
+        <header class="workspace-header card-surface">
+          <div class="workspace-header-main workspace-header-writing-first">
+            <div class="header-note-meta">
+              <div class="header-title-stack">
+                <input id="note-title" class="title-input" type="text" placeholder="Untitled note" data-i18n-placeholder="notes.titlePlaceholder" />
+                <div class="header-inline-pills">
+                  <span id="note-storage-pill" class="pill subtle" data-i18n="notes.storageBadge">Saved as Markdown</span>
+                  <span id="note-source-pill" class="pill subtle hidden" data-i18n="notes.importedSourceBadge">Imported source</span>
+                </div>
+              </div>
+
+              <div id="note-details-panel" class="note-details-panel hidden">
+                <div class="header-meta-grid">
+                  <label>
+                    <span data-i18n="notes.tags">Tags</span>
+                    <input id="note-tags" type="text" placeholder="biology, chapter-2" data-i18n-placeholder="notes.tagsPlaceholder" />
+                  </label>
+                  <label>
+                    <span data-i18n="notes.defaultDeck">Default deck</span>
+                    <input id="note-deck" type="text" list="anki-decks" placeholder="Default" data-i18n-placeholder="notes.defaultDeckPlaceholder" />
+                  </label>
+                  <label class="pin-chip">
+                    <span data-i18n="notes.pinned">Pinned</span>
+                    <input id="note-pinned" type="checkbox" />
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div class="header-actions header-actions-writing-first">
+              <div class="header-status">
+                <span id="save-status" class="muted">Ready</span>
+                <span id="editor-stats" class="muted">0 words</span>
+              </div>
+              <button id="toggle-note-details-btn" class="ghost" type="button" data-i18n="topbar.noteDetails">Details</button>
+              <button id="toggle-study-btn" class="ghost" type="button" data-i18n="topbar.studyTools">Study</button>
+              <button id="open-settings-btn" class="ghost" data-i18n="topbar.openSettings">Settings</button>
+            </div>
+          </div>
+        </header>
+
+        <div id="workspace-grid" class="workspace-grid study-collapsed">
+          <section class="editor-column">
+            <div class="editor-toolbar card-surface editor-toolbar-minimal">
+              <div class="editor-toolbar-copy">
+                <span class="pill subtle" data-i18n="editor.storageHint">Stored as Markdown in the background</span>
+                <span class="editor-shortcut-hint muted" data-i18n="editor.shortcutHint">Use # for headings, - for lists, &gt; for quotes, and Ctrl/Cmd+B for bold.</span>
+              </div>
+              <div class="toolbar-group right editor-tools-side">
+                <button id="toggle-coverage-view-btn" class="ghost" type="button" data-i18n="coverage.toggleView">Show coverage in editor</button>
+              </div>
+            </div>
+
+            <div id="editor-shell" class="card-surface editor-shell">
+              <div id="editor-empty-state" class="editor-empty-state hidden">
+                <div class="editor-empty-panel">
+                  <span class="section-label" data-i18n="editor.emptyLabel">Blank note</span>
+                  <h3 data-i18n="editor.emptyTitle">Start with your own thoughts</h3>
+                  <p class="muted" data-i18n="editor.emptySubtitle">Type directly. Nanki saves Markdown in the background and lets you import files later.</p>
+                  <div class="editor-empty-actions">
+                    <button id="focus-editor-btn" class="primary" type="button" data-i18n="editor.startWriting">Start writing</button>
+                    <button id="empty-import-file-btn" class="ghost" type="button" data-i18n="editor.importFile">Import file</button>
+                    <button id="empty-import-text-btn" class="ghost" type="button" data-i18n="editor.pasteText">Paste text</button>
+                  </div>
+                </div>
+              </div>
+              <div id="editor-coverage-view" class="editor-coverage-view hidden"></div>
+              <div id="note-editor" class="rich-editor prose" contenteditable="true" spellcheck="true" data-placeholder-key="editor.placeholder"></div>
+
+              <div id="quick-card-dock" class="quick-card-dock hidden">
+                <div class="quick-card-head">
+                  <div class="quick-card-title-group">
+                    <strong data-i18n="quickCard.title">Fast card</strong>
+                    <span id="quick-card-meta" class="muted" data-i18n="quickCard.emptyMeta">Add a front and back from your note.</span>
+                  </div>
+                  <div class="quick-card-head-actions">
+                    <button id="quick-card-expand-btn" class="ghost" type="button" data-i18n="quickCard.openDetails">Open details</button>
+                    <button id="quick-card-clear-btn" class="ghost" type="button" data-i18n="quickCard.clear">Clear</button>
+                  </div>
+                </div>
+                <div class="quick-card-grid">
+                  <label>
+                    <span data-i18n="cards.front">Front / Text</span>
+                    <textarea id="quick-card-front" rows="3"></textarea>
+                  </label>
+                  <label>
+                    <span data-i18n="cards.back">Back</span>
+                    <textarea id="quick-card-back" rows="3"></textarea>
+                  </label>
+                </div>
+                <div class="quick-card-footer">
+                  <span id="quick-card-status" class="muted" data-i18n="quickCard.hint">Use To front and To back from the selection bubble, then save.</span>
+                  <div class="quick-card-footer-actions">
+                    <button id="quick-card-save-btn" class="primary" type="button" data-i18n="quickCard.save">Save card</button>
+                    <button id="quick-card-save-push-btn" type="button" data-i18n="quickCard.savePush">Save &amp; push</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <aside id="study-inspector" class="inspector hidden">
+            <div class="inspector-header card-surface">
+              <div class="panel-head stacked-panel-head">
+                <div>
+                  <h3 data-i18n="inspector.title">Study tools</h3>
+                  <p class="muted" data-i18n="inspector.subtitle">Open this when you want cards, coverage, or your imported source.</p>
+                </div>
+                <button id="close-study-btn" class="ghost" type="button" data-i18n="common.close">Close</button>
+              </div>
+              <div class="inspector-tabs">
+                <button class="inspector-tab active" data-panel="cards" data-i18n="inspector.cards">Cards</button>
+                <button class="inspector-tab" data-panel="coverage" data-i18n="inspector.coverage">Coverage</button>
+                <button class="inspector-tab" data-panel="source" data-i18n="inspector.source">Source</button>
+              </div>
+            </div>
+
+            <section id="cards-panel" class="inspector-panel active card-surface">
+              <div class="panel-head panel-head-cards">
+                <div>
+                  <h4 data-i18n="cards.savedCards">Saved cards for note</h4>
+                  <p id="card-count" class="muted">0</p>
+                </div>
+                <div class="button-grid compact-buttons">
+                  <button id="new-card-btn" data-i18n="cards.newCard">New card</button>
+                  <button id="push-all-btn" class="primary" data-i18n="cards.pushAll">Push all</button>
+                </div>
+              </div>
+              <div class="export-row">
+                <button id="export-csv-btn">CSV</button>
+                <button id="export-anki-btn">Anki TXT</button>
+                <button id="export-apkg-btn">APKG</button>
+              </div>
+              <div id="cards-empty-hint" class="callout" data-i18n="cards.emptyHint">Select text in your note or imported source and use the popup to create a card instantly.</div>
+              <div id="card-list" class="card-list"></div>
+            </section>
+
+            <section id="coverage-panel" class="inspector-panel card-surface">
+              <div class="panel-head">
+                <div>
+                  <h4 data-i18n="coverage.title">Flashcard coverage</h4>
+                  <p id="coverage-summary-text" class="muted">No cards linked yet.</p>
+                </div>
+                <button id="refresh-coverage-btn" data-i18n="coverage.refresh">Refresh</button>
+              </div>
+
+              <div class="coverage-hero">
+                <div id="coverage-percent" class="coverage-percent">0%</div>
+                <div class="coverage-bar"><span id="coverage-bar-fill"></span></div>
+                <div id="coverage-stat-pills" class="stat-pills"></div>
+              </div>
+
+              <div class="coverage-columns">
+                <section>
+                  <div class="section-label" data-i18n="coverage.bySection">By section</div>
+                  <div id="coverage-sections" class="coverage-list"></div>
+                </section>
+                <section>
+                  <div class="section-label" data-i18n="coverage.largestGaps">Largest gaps</div>
+                  <div id="coverage-gaps" class="coverage-list"></div>
+                </section>
+                <section>
+                  <div class="section-label" data-i18n="coverage.unmappedCards">Cards without mapping</div>
+                  <div id="coverage-unmapped" class="coverage-list"></div>
+                </section>
+                <section>
+                  <div class="section-label" data-i18n="coverage.ankiMatches">Matching Anki cards</div>
+                  <div id="coverage-anki-matches" class="coverage-list"></div>
+                </section>
+              </div>
+
+            </section>
+
+            <section id="source-panel" class="inspector-panel card-surface">
+              <div class="panel-head">
+                <div>
+                  <h4 data-i18n="source.title">Imported source</h4>
+                  <p id="source-summary" class="muted">No imported source for this note.</p>
+                </div>
+                <button id="open-source-btn" class="hidden" data-i18n="source.openOriginal">Open original</button>
+              </div>
+              <iframe id="pdf-preview" class="pdf-preview hidden" title="Original PDF preview"></iframe>
+              <div id="source-viewer" class="source-viewer"></div>
+            </section>
+          </aside>
+        </div>
+      </main>
+    </div>
+
+    <div id="selection-bubble" class="selection-bubble hidden">
+      <button id="bubble-basic-btn" class="primary" data-i18n="selection.basicCard">Basic</button>
+      <button id="bubble-cloze-btn" data-i18n="selection.clozeCard">Cloze</button>
+      <button id="bubble-front-btn" data-i18n="selection.useAsFront">To front</button>
+      <button id="bubble-back-btn" data-i18n="selection.useAsBack">To back</button>
+    </div>
+
+    <div id="card-drawer" class="overlay hidden">
+      <div class="overlay-backdrop" data-close-drawer="true"></div>
+      <aside class="drawer-panel">
+        <div class="drawer-header">
+          <div>
+            <h3 id="drawer-title" data-i18n="drawer.newCardTitle">Quick card</h3>
+            <p id="drawer-status" class="muted" data-i18n="drawer.subtitle">Built from your current selection without leaving the note.</p>
+          </div>
+          <button id="drawer-close-btn" class="ghost" data-i18n="common.close">Close</button>
+        </div>
+
+        <div class="drawer-body">
+          <div id="drawer-selection-meta" class="selection-chip muted"></div>
+          <div id="drawer-selection-preview" class="selection-preview"></div>
+
+          <div class="drawer-grid">
+            <label>
+              <span data-i18n="cards.type">Type</span>
+              <select id="drawer-card-type">
+                <option value="basic" data-i18n="cardTypes.basic">Basic</option>
+                <option value="reverse" data-i18n="cardTypes.reverse">Basic + reverse</option>
+                <option value="cloze" data-i18n="cardTypes.cloze">Cloze</option>
+              </select>
+            </label>
+            <label>
+              <span data-i18n="cards.deck">Deck</span>
+              <input id="drawer-card-deck" type="text" list="anki-decks" placeholder="Default" data-i18n-placeholder="notes.defaultDeckPlaceholder" />
+            </label>
+            <label class="wide">
+              <span data-i18n="cards.tags">Tags</span>
+              <input id="drawer-card-tags" type="text" placeholder="term, exam, lecture" data-i18n-placeholder="cards.tagsPlaceholder" />
+            </label>
+            <label class="wide">
+              <span data-i18n="cards.front">Front / Text</span>
+              <textarea id="drawer-card-front" rows="4"></textarea>
+            </label>
+            <label class="wide">
+              <span data-i18n="cards.back">Back</span>
+              <textarea id="drawer-card-back" rows="4"></textarea>
+            </label>
+            <label class="wide">
+              <span data-i18n="cards.extra">Extra</span>
+              <textarea id="drawer-card-extra" rows="3" placeholder="Extra context" data-i18n-placeholder="cards.extraPlaceholder"></textarea>
+            </label>
+            <label class="wide">
+              <span data-i18n="cards.sourceLocator">Source locator</span>
+              <input id="drawer-card-source-locator" type="text" placeholder="Page 4 / Slide 2 / section heading" data-i18n-placeholder="cards.sourceLocatorPlaceholder" />
+            </label>
+          </div>
+        </div>
+
+        <div class="drawer-footer">
+          <button id="drawer-delete-btn" class="ghost danger hidden" data-i18n="cards.delete">Delete</button>
+          <button id="drawer-save-btn" class="primary" data-i18n="cards.saveCard">Save card</button>
+          <button id="drawer-save-push-btn" data-i18n="cards.saveAndPush">Save &amp; push</button>
+        </div>
+      </aside>
+    </div>
+
+    <div id="settings-modal" class="overlay hidden">
+      <div class="overlay-backdrop" data-close-settings="true"></div>
+      <div class="modal-panel settings-modal-panel">
+        <div class="drawer-header">
+          <div>
+            <h3 data-i18n="settings.title">Settings</h3>
+            <p class="muted" data-i18n="settings.subtitle">Workspace, language, and Anki connection.</p>
+          </div>
+          <button id="settings-close-btn" class="ghost" data-i18n="common.close">Close</button>
+        </div>
+
+        <div class="settings-grid">
+          <section class="card-surface nested-card">
+            <div class="panel-head inline-bottom-gap">
+              <div>
+                <h4 data-i18n="settings.generalTitle">General settings</h4>
+                <p class="muted" data-i18n="settings.generalSubtitle">Workspace and interface language.</p>
+              </div>
+            </div>
+            <div class="settings-form-grid">
+              <label class="wide">
+                <span data-i18n="settings.workspacePath">Workspace path</span>
+                <input id="workspace-path" type="text" />
+              </label>
+              <label>
+                <span data-i18n="settings.language">Language</span>
+                <select id="settings-language">
+                  <option value="en">English</option>
+                  <option value="de">Deutsch</option>
+                </select>
+              </label>
+            </div>
+            <div class="toolbar-group right compact-top-gap">
+              <button id="save-settings-btn" class="primary" data-i18n="settings.save">Save settings</button>
+            </div>
+          </section>
+
+          <section class="card-surface nested-card">
+            <div class="panel-head inline-bottom-gap">
+              <div>
+                <h4 data-i18n="settings.ankiTitle">AnkiConnect</h4>
+                <p class="muted" data-i18n="settings.ankiSubtitle">Connection, deck discovery, and sync behavior.</p>
+              </div>
+            </div>
+            <div class="settings-form-grid">
+              <label class="wide">
+                <span data-i18n="settings.ankiUrl">AnkiConnect URL</span>
+                <input id="settings-anki-url" type="text" placeholder="http://127.0.0.1:8765" />
+              </label>
+              <label class="checkbox-row wide">
+                <input id="settings-auto-sync" type="checkbox" />
+                <span data-i18n="settings.autoSync">Sync automatically after pushing cards</span>
+              </label>
+            </div>
+            <div class="toolbar-group wrap compact-top-gap">
+              <button id="anki-test-btn" data-i18n="settings.testConnection">Test connection</button>
+              <button id="anki-refresh-btn" data-i18n="settings.refreshDecks">Refresh decks</button>
+            </div>
+            <div class="settings-status-card compact-top-gap">
+              <div id="anki-status-text" class="settings-status-text muted">Not tested yet.</div>
+              <div id="anki-status-meta" class="settings-status-meta"></div>
+            </div>
+            <div class="settings-lists-grid compact-top-gap">
+              <section>
+                <div class="section-label" data-i18n="settings.decks">Decks</div>
+                <div id="settings-deck-list" class="settings-chip-list"></div>
+              </section>
+              <section>
+                <div class="section-label" data-i18n="settings.models">Models</div>
+                <div id="settings-model-list" class="settings-chip-list"></div>
+              </section>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <div id="import-hub-modal" class="overlay hidden">
+      <div class="overlay-backdrop" data-close-import-hub="true"></div>
+      <div class="modal-panel import-hub-panel">
+        <div class="drawer-header">
+          <div>
+            <h3 data-i18n="importHub.title">Bring existing material into Nanki</h3>
+            <p class="muted" data-i18n="importHub.subtitle">Import is optional. Your main workflow can stay centered on your own notes.</p>
+          </div>
+          <button id="import-hub-close-btn" class="ghost" data-i18n="common.close">Close</button>
+        </div>
+
+        <div class="import-hub-grid">
+          <button id="import-hub-file-btn" class="import-option-card" type="button">
+            <span class="section-label" data-i18n="sidebar.importFile">Import file</span>
+            <strong data-i18n="importHub.fileTitle">Import a file</strong>
+            <p class="muted" data-i18n="importHub.fileSubtitle">PDF, Markdown, plain text, or PowerPoint</p>
+          </button>
+          <button id="import-hub-text-btn" class="import-option-card" type="button">
+            <span class="section-label" data-i18n="sidebar.pasteText">Paste text</span>
+            <strong data-i18n="importHub.textTitle">Paste existing text</strong>
+            <p class="muted" data-i18n="importHub.textSubtitle">Turn copied excerpts into a new note</p>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div id="text-import-modal" class="overlay hidden">
+      <div class="overlay-backdrop" data-close-import="true"></div>
+      <div class="modal-panel import-modal-panel">
+        <div class="drawer-header">
+          <div>
+            <h3 data-i18n="importText.title">Import pasted text</h3>
+            <p class="muted" data-i18n="importText.subtitle">Paste lecture notes, transcript text, or excerpts.</p>
+          </div>
+          <button id="text-import-close-btn" class="ghost" data-i18n="common.close">Close</button>
+        </div>
+        <div class="settings-form-grid">
+          <label>
+            <span data-i18n="importText.noteTitle">Title</span>
+            <input id="text-import-title" type="text" placeholder="Lecture notes" data-i18n-placeholder="importText.titlePlaceholder" />
+          </label>
+          <label>
+            <span data-i18n="importText.type">Type</span>
+            <select id="text-import-type">
+              <option value="text" data-i18n="importText.plainText">Plain text</option>
+              <option value="markdown" data-i18n="importText.markdown">Markdown</option>
+            </select>
+          </label>
+          <label class="wide">
+            <span data-i18n="importText.tags">Tags</span>
+            <input id="text-import-tags" type="text" placeholder="lecture, week-3" data-i18n-placeholder="importText.tagsPlaceholder" />
+          </label>
+          <label class="wide">
+            <span data-i18n="importText.content">Content</span>
+            <textarea id="text-import-content" rows="14"></textarea>
+          </label>
+        </div>
+        <div class="toolbar-group right compact-top-gap">
+          <button id="text-import-submit-btn" class="primary" data-i18n="importText.import">Import</button>
+        </div>
+      </div>
+    </div>
+
+    <input id="file-input" type="file" class="hidden" accept=".pdf,.txt,.md,.markdown,.pptx" />
+    <datalist id="anki-decks"></datalist>
+    <div id="toast" class="toast hidden"></div>
+
+    <script src="/static/app.js" defer></script>
+    <script src="/static/ai_ui.js" defer></script>
+  </body>
+</html>

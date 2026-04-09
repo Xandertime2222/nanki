@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nanki"
+version = "0.3.1"
+description = "Nanki: local-first study notes and flashcards with AnkiConnect integration"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "OpenAI" }]
+dependencies = [
+  "fastapi>=0.110",
+  "uvicorn>=0.27",
+  "jinja2>=3.1",
+  "python-multipart>=0.0.9",
+  "pydantic>=2.6",
+  "PyYAML>=6.0",
+  "httpx>=0.27",
+  "mistune>=3.0",
+  "PyMuPDF>=1.24",
+  "markdownify>=0.13",
+]
+
+[project.scripts]
+nanki = "noteforge_anki_studio.__main__:main"
+noteforge-anki-studio = "noteforge_anki_studio.__main__:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+noteforge_anki_studio = ["templates/*.html", "static/*"]

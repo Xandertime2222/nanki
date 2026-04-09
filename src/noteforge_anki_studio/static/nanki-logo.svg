@@ -1,0 +1,44 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="nankiBg" x1="32" y1="24" x2="224" y2="232" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#EAF7FF"/>
+      <stop offset="1" stop-color="#F4FFF7"/>
+    </linearGradient>
+    <linearGradient id="nankiCards" x1="148" y1="132" x2="220" y2="212" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5AC8FA"/>
+      <stop offset="1" stop-color="#34C759"/>
+    </linearGradient>
+    <filter id="shadow" x="18" y="18" width="220" height="220" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#0F172A" flood-opacity="0.10"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#shadow)">
+    <rect x="28" y="28" width="200" height="200" rx="52" fill="url(#nankiBg)"/>
+    <rect x="28.75" y="28.75" width="198.5" height="198.5" rx="51.25" stroke="#D8E6EE" stroke-opacity="0.8" stroke-width="1.5"/>
+  </g>
+
+  <g opacity="0.96">
+    <rect x="146" y="142" width="58" height="72" rx="14" transform="rotate(-10 146 142)" fill="white" stroke="#D5E5EE" stroke-width="2"/>
+    <rect x="158" y="132" width="58" height="72" rx="14" transform="rotate(4 158 132)" fill="url(#nankiCards)"/>
+    <rect x="166.75" y="132.75" width="56.5" height="70.5" rx="13.25" transform="rotate(4 166.75 132.75)" stroke="white" stroke-opacity="0.45" stroke-width="1.5"/>
+    <line x1="177" y1="153" x2="205" y2="155" stroke="white" stroke-opacity="0.9" stroke-width="4.5" stroke-linecap="round"/>
+    <line x1="174" y1="167" x2="211" y2="170" stroke="white" stroke-opacity="0.72" stroke-width="4.5" stroke-linecap="round"/>
+    <line x1="181" y1="181" x2="206" y2="183" stroke="white" stroke-opacity="0.56" stroke-width="4.5" stroke-linecap="round"/>
+  </g>
+
+  <g stroke="#111214" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M78 103L94 71L116 94"/>
+    <path d="M178 103L162 71L140 94"/>
+    <path d="M89 101C97 92 111 86 128 86C145 86 159 92 167 101"/>
+    <path d="M91 105C82 114 76 127 76 141C76 171 99 191 128 191C145 191 160 184 170 171"/>
+    <path d="M180 140C180 149 178 157 174 164"/>
+    <path d="M112 132V132.6"/>
+    <path d="M144 132V132.6"/>
+    <path d="M121 148C124 152 132 152 135 148"/>
+    <path d="M104 148L87 146"/>
+    <path d="M103 156L86 159"/>
+    <path d="M152 148L169 146"/>
+    <path d="M153 156L170 159"/>
+  </g>
+</svg>

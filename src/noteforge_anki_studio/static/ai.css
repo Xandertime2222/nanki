@@ -1,0 +1,122 @@
+.ai-modal-panel {
+  width: min(1120px, calc(100vw - 3rem));
+  max-height: calc(100vh - 3rem);
+  overflow: auto;
+}
+
+.ai-meta-row {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.ai-tabs {
+  margin-bottom: 1rem;
+}
+
+.ai-tab-panel {
+  display: block;
+}
+
+.ai-chat-log {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  max-height: 280px;
+  overflow: auto;
+  padding: 0.25rem 0.1rem 0.25rem 0;
+}
+
+.ai-chat-bubble {
+  max-width: 88%;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 0.85rem 1rem;
+  background: var(--bg-soft);
+  box-shadow: var(--shadow-soft);
+}
+
+.ai-chat-bubble.user {
+  align-self: flex-end;
+}
+
+.ai-chat-bubble.assistant {
+  align-self: flex-start;
+}
+
+.ai-chat-role {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+}
+
+.ai-chat-content {
+  line-height: 1.5;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.ai-output-box {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  min-height: 160px;
+  padding: 1rem;
+  background: var(--bg-soft);
+  white-space: pre-wrap;
+  line-height: 1.55;
+}
+
+.ai-generated-card-list {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.ai-generated-card {
+  padding: 1rem;
+  border-radius: var(--radius-md);
+}
+
+.ai-generated-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+}
+
+.ai-generated-card-block + .ai-generated-card-block {
+  margin-top: 0.85rem;
+}
+
+.quick-card-source-preview {
+  margin-top: 0.85rem;
+  border-top: 1px solid var(--line);
+  padding-top: 0.85rem;
+}
+
+.quick-card-collapsed .quick-card-grid,
+.quick-card-collapsed .quick-card-footer,
+.quick-card-collapsed .quick-card-source-preview {
+  display: none;
+}
+
+.quick-card-collapsed {
+  padding-bottom: 0.9rem;
+}
+
+.quick-card-collapsed .quick-card-head {
+  margin-bottom: 0;
+}
+
+@media (max-width: 900px) {
+  .ai-modal-panel {
+    width: calc(100vw - 1rem);
+    max-height: calc(100vh - 1rem);
+  }
+
+  .ai-chat-bubble {
+    max-width: 100%;
+  }
+}
