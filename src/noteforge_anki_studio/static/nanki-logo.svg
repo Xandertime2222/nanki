@@ -1,44 +1,100 @@
 <svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="nankiBg" x1="32" y1="24" x2="224" y2="232" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#EAF7FF"/>
-      <stop offset="1" stop-color="#F4FFF7"/>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="256" y2="256" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#6C3FF4"/>
+      <stop offset="100%" stop-color="#4F8EF7"/>
     </linearGradient>
-    <linearGradient id="nankiCards" x1="148" y1="132" x2="220" y2="212" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#5AC8FA"/>
-      <stop offset="1" stop-color="#34C759"/>
+    <linearGradient id="card1Grad" x1="0" y1="0" x2="1" y2="1" gradientUnits="objectBoundingBox">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.08"/>
     </linearGradient>
-    <filter id="shadow" x="18" y="18" width="220" height="220" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
-      <feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#0F172A" flood-opacity="0.10"/>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="18" flood-color="#1a0a4a" flood-opacity="0.35"/>
     </filter>
+    <filter id="cardShadow">
+      <feDropShadow dx="2" dy="4" stdDeviation="6" flood-color="#1a0a4a" flood-opacity="0.25"/>
+    </filter>
+    <clipPath id="roundedSquare">
+      <rect width="256" height="256" rx="56"/>
+    </clipPath>
   </defs>
 
-  <g filter="url(#shadow)">
-    <rect x="28" y="28" width="200" height="200" rx="52" fill="url(#nankiBg)"/>
-    <rect x="28.75" y="28.75" width="198.5" height="198.5" rx="51.25" stroke="#D8E6EE" stroke-opacity="0.8" stroke-width="1.5"/>
+  <!-- Background -->
+  <rect width="256" height="256" rx="56" fill="url(#bgGrad)" filter="url(#softShadow)"/>
+
+  <!-- Subtle inner highlight at top -->
+  <ellipse cx="128" cy="40" rx="90" ry="32" fill="white" fill-opacity="0.08"/>
+
+  <!-- ── FLASHCARDS (stacked behind cat) ── -->
+
+  <!-- Card 3 (back, rotated left) -->
+  <g filter="url(#cardShadow)" transform="rotate(-14, 128, 170)">
+    <rect x="68" y="138" width="84" height="62" rx="10" fill="white" fill-opacity="0.18"/>
+    <rect x="68" y="138" width="84" height="62" rx="10" stroke="white" stroke-opacity="0.25" stroke-width="1.2"/>
   </g>
 
-  <g opacity="0.96">
-    <rect x="146" y="142" width="58" height="72" rx="14" transform="rotate(-10 146 142)" fill="white" stroke="#D5E5EE" stroke-width="2"/>
-    <rect x="158" y="132" width="58" height="72" rx="14" transform="rotate(4 158 132)" fill="url(#nankiCards)"/>
-    <rect x="166.75" y="132.75" width="56.5" height="70.5" rx="13.25" transform="rotate(4 166.75 132.75)" stroke="white" stroke-opacity="0.45" stroke-width="1.5"/>
-    <line x1="177" y1="153" x2="205" y2="155" stroke="white" stroke-opacity="0.9" stroke-width="4.5" stroke-linecap="round"/>
-    <line x1="174" y1="167" x2="211" y2="170" stroke="white" stroke-opacity="0.72" stroke-width="4.5" stroke-linecap="round"/>
-    <line x1="181" y1="181" x2="206" y2="183" stroke="white" stroke-opacity="0.56" stroke-width="4.5" stroke-linecap="round"/>
+  <!-- Card 2 (middle, slight right tilt) -->
+  <g filter="url(#cardShadow)" transform="rotate(8, 128, 170)">
+    <rect x="68" y="138" width="84" height="62" rx="10" fill="white" fill-opacity="0.28"/>
+    <rect x="68" y="138" width="84" height="62" rx="10" stroke="white" stroke-opacity="0.35" stroke-width="1.2"/>
+    <!-- lines on card -->
+    <line x1="82" y1="158" x2="138" y2="158" stroke="white" stroke-opacity="0.5" stroke-width="3" stroke-linecap="round"/>
+    <line x1="82" y1="170" x2="128" y2="170" stroke="white" stroke-opacity="0.35" stroke-width="3" stroke-linecap="round"/>
   </g>
 
-  <g stroke="#111214" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M78 103L94 71L116 94"/>
-    <path d="M178 103L162 71L140 94"/>
-    <path d="M89 101C97 92 111 86 128 86C145 86 159 92 167 101"/>
-    <path d="M91 105C82 114 76 127 76 141C76 171 99 191 128 191C145 191 160 184 170 171"/>
-    <path d="M180 140C180 149 178 157 174 164"/>
-    <path d="M112 132V132.6"/>
-    <path d="M144 132V132.6"/>
-    <path d="M121 148C124 152 132 152 135 148"/>
-    <path d="M104 148L87 146"/>
-    <path d="M103 156L86 159"/>
-    <path d="M152 148L169 146"/>
-    <path d="M153 156L170 159"/>
+  <!-- Card 1 (front, upright) -->
+  <g filter="url(#cardShadow)">
+    <rect x="104" y="148" width="84" height="62" rx="10" fill="white" fill-opacity="0.92"/>
+    <rect x="104" y="148" width="84" height="62" rx="10" stroke="white" stroke-opacity="0.6" stroke-width="1.2"/>
+    <!-- lines on front card -->
+    <line x1="118" y1="168" x2="174" y2="168" stroke="#6C3FF4" stroke-opacity="0.5" stroke-width="3" stroke-linecap="round"/>
+    <line x1="118" y1="180" x2="164" y2="180" stroke="#6C3FF4" stroke-opacity="0.35" stroke-width="3" stroke-linecap="round"/>
+    <line x1="118" y1="192" x2="156" y2="192" stroke="#6C3FF4" stroke-opacity="0.25" stroke-width="3" stroke-linecap="round"/>
   </g>
+
+  <!-- ── CAT (simple, cute, white) ── -->
+
+  <!-- Cat body -->
+  <ellipse cx="108" cy="150" rx="38" ry="32" fill="white" fill-opacity="0.95"/>
+
+  <!-- Cat head -->
+  <circle cx="108" cy="108" r="36" fill="white" fill-opacity="0.95"/>
+
+  <!-- Left ear (triangle) -->
+  <polygon points="80,86 72,58 96,78" fill="white" fill-opacity="0.95"/>
+  <!-- Left ear inner -->
+  <polygon points="80,84 75,64 92,78" fill="#C4AAFF" fill-opacity="0.7"/>
+
+  <!-- Right ear -->
+  <polygon points="136,86 144,58 120,78" fill="white" fill-opacity="0.95"/>
+  <!-- Right ear inner -->
+  <polygon points="136,84 141,64 124,78" fill="#C4AAFF" fill-opacity="0.7"/>
+
+  <!-- Cat face -->
+  <!-- Eyes -->
+  <ellipse cx="97" cy="108" rx="6" ry="7" fill="#3d2080"/>
+  <ellipse cx="119" cy="108" rx="6" ry="7" fill="#3d2080"/>
+  <!-- Eye shine -->
+  <circle cx="99" cy="106" r="2" fill="white"/>
+  <circle cx="121" cy="106" r="2" fill="white"/>
+
+  <!-- Nose -->
+  <polygon points="108,118 104,122 112,122" fill="#F9A8D4"/>
+  <!-- Mouth -->
+  <path d="M104 122 Q108 128 112 122" stroke="#3d2080" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+
+  <!-- Whiskers left -->
+  <line x1="76" y1="118" x2="100" y2="120" stroke="#6C3FF4" stroke-opacity="0.35" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="76" y1="124" x2="100" y2="124" stroke="#6C3FF4" stroke-opacity="0.35" stroke-width="1.5" stroke-linecap="round"/>
+
+  <!-- Whiskers right -->
+  <line x1="140" y1="118" x2="116" y2="120" stroke="#6C3FF4" stroke-opacity="0.35" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="140" y1="124" x2="116" y2="124" stroke="#6C3FF4" stroke-opacity="0.35" stroke-width="1.5" stroke-linecap="round"/>
+
+  <!-- Cat tail (peeking from right of body) -->
+  <path d="M144 158 Q168 140 162 120 Q158 108 168 102" stroke="white" stroke-opacity="0.9" stroke-width="9" fill="none" stroke-linecap="round"/>
+
+  <!-- Paws -->
+  <ellipse cx="90" cy="178" rx="14" ry="8" fill="white" fill-opacity="0.9"/>
+  <ellipse cx="126" cy="178" rx="14" ry="8" fill="white" fill-opacity="0.9"/>
 </svg>
