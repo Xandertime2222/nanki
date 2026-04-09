@@ -7,7 +7,6 @@ import sys
 import os
 import io
 import threading
-import webview
 
 # Fix for PyInstaller --windowed mode
 if sys.stdout is None:
@@ -21,18 +20,22 @@ if getattr(sys, 'frozen', False):
     sys.path.insert(0, bundle_dir)
 
 import uvicorn
+import webview
+
 from noteforge_anki_studio.app import app
-from noteforge_anki_studio.config import settings_manager
+from noteforge_anki_studio.config import SettingsManager
 
 
 def start_server():
     """Start the FastAPI server in a background thread."""
+    settings_manager = SettingsManager()
     settings = settings_manager.load()
     uvicorn.run(app, host=settings.host, port=settings.port, log_level="warning")
 
 
 def main():
     """Launch Nanki in a native desktop window."""
+    settings_manager = SettingsManager()
     settings = settings_manager.load()
     url = f"http://{settings.host}:{settings.port}"
     
@@ -48,7 +51,7 @@ def main():
         height=900,
         min_size=(900, 600),
         resizable=True,
-        frame=True,  # Native window frame
+        frame=True,
         easy_drag=False,
     )
     
