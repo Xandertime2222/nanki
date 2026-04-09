@@ -82,7 +82,7 @@ jobs:
         SectionEnd
         '@
         Set-Content -Path "build.nsi" -Value $nsisContent
-        makensis build.nsi
+        & "C:\Program Files (x86)\NSIS\makensis.exe" build.nsi
         
     - name: Upload installer
       uses: actions/upload-artifact@v4
