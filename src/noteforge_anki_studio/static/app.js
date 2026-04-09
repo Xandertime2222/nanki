@@ -112,7 +112,7 @@ const I18N = {
     'cards.edit': 'Edit',
     'cards.push': 'Push',
     'cards.delete': 'Delete',
-    'cards.mappedWords': 'Mapped · {count} words',
+    'cards.mappedWords': 'Mapped · {count} sentence(s)',
     'cards.unmapped': 'Unmapped',
     'cards.frontLabel': 'Front / Text',
     'cards.backLabel': 'Back',
@@ -157,14 +157,14 @@ const I18N = {
     'coverage.noSectionData': 'No section data yet.',
     'coverage.noGaps': 'No gaps to show yet.',
     'coverage.noCardMapping': 'No card mapping data yet.',
-    'coverage.summary': '{covered} of {total} note words are covered by {mapped} matching card(s).',
+    'coverage.summary': '{covered} of {total} sentences are covered by {mapped} matching card(s).',
     'coverage.totalCards': '{count} total cards',
     'coverage.mapped': '{count} mapped',
     'coverage.unmapped': '{count} unmapped',
     'coverage.incompleteSections': '{count} incomplete section(s)',
-    'coverage.sectionWords': '{covered}/{total} words',
+    'coverage.sectionWords': '{covered}/{total} sentences',
     'coverage.sectionCards': '{count} card(s)',
-    'coverage.gapWords': '{count} words',
+    'coverage.gapWords': '{count} sentences',
     'coverage.everythingCovered': 'Everything currently has at least some card coverage.',
     'coverage.allMapped': 'All saved cards are mapped to note text.',
     'coverage.noSourceReference': 'No source reference stored.',
@@ -250,6 +250,7 @@ const I18N = {
     'dialogs.deleteCardConfirm': 'Delete this card?',
     'unit.cards': 'cards',
     'unit.words': 'words',
+    'unit.chars': 'chars',
     'unit.none': '—',
   },
   de: {
@@ -324,7 +325,7 @@ const I18N = {
     'cards.edit': 'Bearbeiten',
     'cards.push': 'Senden',
     'cards.delete': 'Löschen',
-    'cards.mappedWords': 'Zugeordnet · {count} Wörter',
+    'cards.mappedWords': 'Zugeordnet · {count} Satz/Sätze',
     'cards.unmapped': 'Nicht zugeordnet',
     'cards.frontLabel': 'Vorderseite / Text',
     'cards.backLabel': 'Rückseite',
@@ -369,14 +370,14 @@ const I18N = {
     'coverage.noSectionData': 'Noch keine Abschnittsdaten.',
     'coverage.noGaps': 'Noch keine Lücken vorhanden.',
     'coverage.noCardMapping': 'Noch keine Zuordnungsdaten vorhanden.',
-    'coverage.summary': '{covered} von {total} Notizwörtern werden durch {mapped} passende Karte(n) abgedeckt.',
+    'coverage.summary': '{covered} von {total} Sätzen werden durch {mapped} passende Karte(n) abgedeckt.',
     'coverage.totalCards': '{count} Karten gesamt',
     'coverage.mapped': '{count} zugeordnet',
     'coverage.unmapped': '{count} nicht zugeordnet',
     'coverage.incompleteSections': '{count} unvollständige(r) Abschnitt(e)',
-    'coverage.sectionWords': '{covered}/{total} Wörter',
+    'coverage.sectionWords': '{covered}/{total} Sätze',
     'coverage.sectionCards': '{count} Karte(n)',
-    'coverage.gapWords': '{count} Wörter',
+    'coverage.gapWords': '{count} Sätze',
     'coverage.everythingCovered': 'Aktuell hat jeder Bereich zumindest etwas Kartenabdeckung.',
     'coverage.allMapped': 'Alle gespeicherten Karten sind dem Notiztext zugeordnet.',
     'coverage.noSourceReference': 'Kein Quellenhinweis gespeichert.',
@@ -462,6 +463,7 @@ const I18N = {
     'dialogs.deleteCardConfirm': 'Diese Karte löschen?',
     'unit.cards': 'Karten',
     'unit.words': 'Wörter',
+    'unit.chars': 'Zeichen',
     'unit.none': '—',
   },
 };
@@ -516,12 +518,21 @@ const interpolate = (template, values = {}) => String(template).replace(/\{(\w+)
 const t = (key, values = {}) => interpolate(translationLookup(currentLanguage(), key), values);
 const emitNankiEvent = (name, detail = {}) => document.dispatchEvent(new CustomEvent(name, { detail }));
 
+const dismissToast = () => {
+  els.toast.classList.add('toast-exit');
+  window.clearTimeout(showToast.timer);
+  window.setTimeout(() => {
+    els.toast.classList.add('hidden');
+    els.toast.classList.remove('toast-exit');
+  }, 180);
+};
+
 const showToast = (message, kind = 'info') => {
   els.toast.textContent = message;
   els.toast.dataset.kind = kind;
-  els.toast.classList.remove('hidden');
+  els.toast.classList.remove('hidden', 'toast-exit');
   window.clearTimeout(showToast.timer);
-  showToast.timer = window.setTimeout(() => els.toast.classList.add('hidden'), 3200);
+  showToast.timer = window.setTimeout(dismissToast, 3200);
 };
 
 const setSaveStatus = (message) => {
@@ -542,7 +553,7 @@ const currentWordCount = () => (editorPlainText().match(/\b\w+\b/g) || []).lengt
 const updateEditorStats = () => {
   const words = currentWordCount();
   const chars = editorPlainText().length;
-  els.editorStats.textContent = `${words} ${t('unit.words')} · ${chars} chars`;
+  els.editorStats.textContent = `${words} ${t('unit.words')} · ${chars} ${t('unit.chars')}`;
 };
 
 
@@ -2072,6 +2083,16 @@ const handleGlobalShortcuts = (event) => {
   const modifier = event.metaKey || event.ctrlKey;
   const key = event.key.toLowerCase();
   const code = event.code || '';
+  if (key === 'escape') {
+    if (state.drawer.open) { closeDrawer({ reset: true }); return; }
+    const aiModal = document.getElementById('ai-modal');
+    if (aiModal && !aiModal.classList.contains('hidden')) { aiModal.classList.add('hidden'); return; }
+    if (!els.settingsModal.classList.contains('hidden')) { closeSettingsModal(); return; }
+    if (!els.textImportModal.classList.contains('hidden')) { closeImportModal(); return; }
+    if (!els.importHubModal.classList.contains('hidden')) { closeImportHubModal(); return; }
+    if (state.coverageView) { state.coverageView = false; renderEditorCoverageView(); return; }
+    return;
+  }
   if (modifier && key === 's' && !event.shiftKey) {
     event.preventDefault();
     persistActiveNote().catch((error) => showToast(error.message, 'error'));
@@ -2244,6 +2265,8 @@ const bindEvents = () => {
   document.querySelectorAll('[data-close-settings="true"]').forEach((node) => node.addEventListener('click', closeSettingsModal));
   document.querySelectorAll('[data-close-import="true"]').forEach((node) => node.addEventListener('click', closeImportModal));
   document.querySelectorAll('[data-close-import-hub="true"]').forEach((node) => node.addEventListener('click', closeImportHubModal));
+
+  els.toast.addEventListener('click', dismissToast);
 
   document.addEventListener('selectionchange', () => refreshSelectionState());
   document.addEventListener('keydown', handleGlobalShortcuts);

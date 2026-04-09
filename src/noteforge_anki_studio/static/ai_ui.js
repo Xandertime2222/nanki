@@ -245,7 +245,7 @@
     const api = getApi();
     if (!api?.state) return { ...DEFAULT_AI_SETTINGS };
     if (!api.state.settings) api.state.settings = {};
-    if (!api.state.settings.ai) api.state.settings.ai = structuredClone(DEFAULT_AI_SETTINGS);
+    if (!api.state.settings.ai) api.state.settings.ai = deepClone(DEFAULT_AI_SETTINGS);
     api.state.settings.ai.prompts = {
       ...DEFAULT_AI_SETTINGS.prompts,
       ...(api.state.settings.ai.prompts || {}),
@@ -253,7 +253,7 @@
     return api.state.settings.ai;
   }
 
-  function structuredClone(value) {
+  function deepClone(value) {
     return JSON.parse(JSON.stringify(value));
   }
 
@@ -400,7 +400,7 @@
                 <h3 data-ai-i18n="ai.modalTitle"></h3>
                 <p class="muted" data-ai-i18n="ai.modalSubtitle"></p>
               </div>
-              <button id="ai-close-btn" class="ghost" type="button">×</button>
+              <button id="ai-close-btn" class="ghost" type="button" aria-label="Close"><svg class="icon" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3.5 3.5l8 8M11.5 3.5l-8 8"/></svg></button>
             </div>
             <div class="ai-meta-row">
               <span id="ai-context-pill" class="pill subtle"></span>
