@@ -50,59 +50,45 @@ jobs:
         name: nanki-windows-build
         path: dist/Nanki/
         
-    - name: Setup NSIS
-      run: choco install nsis
-      
-    - name: Create Installer
+    - name: Create simple installer
       run: |
-        # Create NSIS script
-        @"
-        Name `"Nanki 0.3.0`"
-        OutFile `"dist\Nanki-Setup.exe`"
-        InstallDir `"`$PROGRAMFILES64\Nanki`"
-        RequestExecutionLevel admin
+        # Create a simple batch installer instead of NSIS
+        @'
+        @echo off
+        setlocal
+        echo ===========================================
+        echo           NANKI 0.3 INSTALLER
+        echo ===========================================
+        echo.
+        set "INSTALL_DIR=%ProgramFiles%\Nanki"
+        if not exist "%INSTALL_DIR%" mkdir "%INSTALL_DIR%"
+        echo Installing to: %INSTALL_DIR%
+        xcopy /E /I /Y "%~dp0Nanki" "%INSTALL_DIR%"
+        echo.
+        echo Creating shortcuts...
+        powershell -Command "$WshShell = New-Object -comObject WScript.Shell; $Shortcut = $WshShell.CreateShortcut('$env:USERPROFILE\Desktop\Nanki.lnk'); $Shortcut.TargetPath = '%INSTALL_DIR%\Nanki.exe'; $Shortcut.Save()"
+        powershell -Command "$WshShell = New-Object -comObject WScript.Shell; $Shortcut = $WshShell.CreateShortcut('$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Nanki.lnk'); $Shortcut.TargetPath = '%INSTALL_DIR%\Nanki.exe'; $Shortcut.Save()"
+        echo.
+        echo ===========================================
+        echo        Installation complete!
+        echo ===========================================
+        pause
+        start "" "%INSTALL_DIR%\Nanki.exe"
+        '@ | Out-File -FilePath "dist\Install-Nanki.bat" -Encoding ASCII
         
-        !include `"MUI2.nsh`"
-        !insertmacro MUI_PAGE_WELCOME
-        !insertmacro MUI_PAGE_DIRECTORY
-        !insertmacro MUI_PAGE_INSTFILES
-        !define MUI_FINISHPAGE_RUN `"`$INSTDIR\Nanki.exe`"
-        !insertmacro MUI_PAGE_FINISH
-        !insertmacro MUI_LANGUAGE `"English`"
-        
-        Section `"Install`"
-          SetOutPath `"`$INSTDIR`"
-          File /r `"dist\Nanki\*.*`"
-          CreateDirectory `"`$SMPROGRAMS\Nanki`"
-          CreateShortcut `"`$SMPROGRAMS\Nanki\Nanki.lnk`" `"`$INSTDIR\Nanki.exe`"
-          CreateShortcut `"`$DESKTOP\Nanki.lnk`" `"`$INSTDIR\Nanki.exe`"
-          WriteUninstaller `"`$INSTDIR\uninstall.exe`"
-        SectionEnd
-        
-        Section `"Uninstall`"
-          Delete `"`$INSTDIR\Nanki.exe`"
-          Delete `"`$INSTDIR\uninstall.exe`"
-          RMDir /r `"`$INSTDIR\_internal`"
-          Delete `"`$DESKTOP\Nanki.lnk`"
-          Delete `"`$SMPROGRAMS\Nanki\Nanki.lnk`"
-          RMDir `"`$SMPROGRAMS\Nanki`"
-          RMDir `"`$INSTDIR`"
-        SectionEnd
-        "@ | Out-File -FilePath build.nsi -Encoding UTF8
-        
-        # Build installer
-        makensis build.nsi
+        # Create ZIP with everything
+        Compress-Archive -Path "dist\Nanki\*" -DestinationPath "dist\Nanki-0.3-Windows.zip" -Force
         
     - name: Upload Installer
       uses: actions/upload-artifact@v4
       with:
         name: nanki-setup
-        path: dist/Nanki-Setup.exe
+        path: dist/Nanki-0.3-Windows.zip
         
     - name: Create Release
       if: startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v1
       with:
-        files: dist/Nanki-Setup.exe
+        files: dist/Nanki-0.3-Windows.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
