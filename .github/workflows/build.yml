@@ -1,0 +1,234 @@
+name: Build Desktop Apps
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: '3.12'
+  APP_NAME: Nanki
+  APP_VERSION: '0.3.2'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e .
+        pip install pyinstaller pyinstaller-hooks-contrib pywebview
+
+    - name: Build with PyInstaller
+      run: |
+        pyinstaller --name ${{ env.APP_NAME }} --windowed --noconsole `
+          --paths src `
+          --add-data "src/noteforge_anki_studio/static;noteforge_anki_studio/static" `
+          --add-data "src/noteforge_anki_studio/templates;noteforge_anki_studio/templates" `
+          --hidden-import noteforge_anki_studio `
+          --hidden-import noteforge_anki_studio.ai `
+          --hidden-import noteforge_anki_studio.anki_connect `
+          --hidden-import noteforge_anki_studio.config `
+          --hidden-import noteforge_anki_studio.coverage `
+          --hidden-import noteforge_anki_studio.exporters `
+          --hidden-import noteforge_anki_studio.importers `
+          --hidden-import noteforge_anki_studio.models `
+          --hidden-import noteforge_anki_studio.prompts `
+          --hidden-import noteforge_anki_studio.storage `
+          --hidden-import noteforge_anki_studio.app `
+          --hidden-import webview `
+          --hidden-import webview.platforms.winforms `
+          --hidden-import uvicorn.logging `
+          --hidden-import uvicorn.loops.auto `
+          --hidden-import uvicorn.protocols.http.auto `
+          --hidden-import uvicorn.protocols.websockets.auto `
+          --hidden-import uvicorn.lifespan.on `
+          --collect-all uvicorn `
+          --collect-all starlette `
+          --collect-all fastapi `
+          --collect-all mistune `
+          --collect-all markdownify `
+          --collect-all httpx `
+          --collect-all pydantic `
+          --collect-all jinja2 `
+          --collect-all PyYAML `
+          --collect-all clr `
+          --collect-all System `
+          --collect-all System.Windows.Forms `
+          launcher_webview.py
+
+    - name: Verify build
+      run: |
+        if (-not (Test-Path "dist/${{ env.APP_NAME }}/${{ env.APP_NAME }}.exe")) {
+          Write-Error "${{ env.APP_NAME }}.exe not found!"
+          exit 1
+        }
+
+    - name: Install NSIS
+      run: choco install nsis -y
+
+    - name: Create installer
+      shell: pwsh
+      run: |
+        $nsisContent = @"
+        !define PRODUCT_NAME "${{ env.APP_NAME }}"
+        !define PRODUCT_VERSION "${{ env.APP_VERSION }}"
+        !define PRODUCT_PUBLISHER "Nanki Project"
+
+        Name "`${PRODUCT_NAME}"
+        OutFile "${{ env.APP_NAME }}-Windows-Setup.exe"
+        InstallDir "`$PROGRAMFILES64\${{ env.APP_NAME }}"
+        InstallDirRegKey HKLM "Software\${{ env.APP_NAME }}" "Install_Dir"
+        RequestExecutionLevel admin
+
+        !include "MUI2.nsh"
+        !insertmacro MUI_PAGE_WELCOME
+        !insertmacro MUI_PAGE_DIRECTORY
+        !insertmacro MUI_PAGE_INSTFILES
+        !define MUI_FINISHPAGE_RUN "`$INSTDIR\${{ env.APP_NAME }}.exe"
+        !insertmacro MUI_PAGE_FINISH
+
+        !insertmacro MUI_LANGUAGE "English"
+
+        Function .onInit
+          ReadRegStr `$0 HKLM "Software\${{ env.APP_NAME }}" "Install_Dir"
+          StrCmp `$0 "" done
+          IfFileExists "`$0\Uninstall.exe" 0 done
+          ExecWait '"`$0\Uninstall.exe" /S _?=`$0'
+          done:
+        FunctionEnd
+
+        Section "Install" SecInstall
+          SetOutPath "`$INSTDIR"
+          File /r "dist\${{ env.APP_NAME }}\*.*"
+
+          CreateDirectory "`$SMPROGRAMS\${{ env.APP_NAME }}"
+          CreateShortcut "`$SMPROGRAMS\${{ env.APP_NAME }}\${{ env.APP_NAME }}.lnk" "`$INSTDIR\${{ env.APP_NAME }}.exe"
+          CreateShortcut "`$DESKTOP\${{ env.APP_NAME }}.lnk" "`$INSTDIR\${{ env.APP_NAME }}.exe"
+
+          WriteUninstaller "`$INSTDIR\Uninstall.exe"
+          WriteRegStr HKLM "Software\${{ env.APP_NAME }}" "Install_Dir" "`$INSTDIR"
+          WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${{ env.APP_NAME }}" "DisplayName" "${{ env.APP_NAME }}"
+          WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${{ env.APP_NAME }}" "UninstallString" "`$INSTDIR\Uninstall.exe"
+          WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${{ env.APP_NAME }}" "DisplayIcon" "`$INSTDIR\${{ env.APP_NAME }}.exe"
+          WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${{ env.APP_NAME }}" "Publisher" "Nanki Project"
+          WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${{ env.APP_NAME }}" "DisplayVersion" "${{ env.APP_VERSION }}"
+        SectionEnd
+
+        Section "Uninstall" SecUninstall
+          Delete "`$INSTDIR\Uninstall.exe"
+          Delete "`$INSTDIR\${{ env.APP_NAME }}.exe"
+          RMDir /r "`$INSTDIR\_internal"
+          RMDir "`$INSTDIR"
+          Delete "`$DESKTOP\${{ env.APP_NAME }}.lnk"
+          Delete "`$SMPROGRAMS\${{ env.APP_NAME }}\${{ env.APP_NAME }}.lnk"
+          RMDir "`$SMPROGRAMS\${{ env.APP_NAME }}"
+          DeleteRegKey HKLM "Software\${{ env.APP_NAME }}"
+          DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${{ env.APP_NAME }}"
+        SectionEnd
+        "@
+        Set-Content -Path "build.nsi" -Value $nsisContent
+        & "C:\Program Files (x86)\NSIS\makensis.exe" build.nsi
+
+    - name: Upload installer
+      uses: actions/upload-artifact@v4
+      with:
+        name: nanki-windows
+        path: ${{ env.APP_NAME }}-Windows-Setup.exe
+
+    - name: Attach to release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: ${{ env.APP_NAME }}-Windows-Setup.exe
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e .
+        pip install pyinstaller pyinstaller-hooks-contrib pywebview
+
+    - name: Build with PyInstaller
+      run: |
+        pyinstaller --name ${{ env.APP_NAME }} --windowed --noconsole \
+          --target-architecture arm64 \
+          --add-data "src/noteforge_anki_studio/static:noteforge_anki_studio/static" \
+          --add-data "src/noteforge_anki_studio/templates:noteforge_anki_studio/templates" \
+          --hidden-import noteforge_anki_studio \
+          --hidden-import noteforge_anki_studio.ai \
+          --hidden-import noteforge_anki_studio.anki_connect \
+          --hidden-import noteforge_anki_studio.config \
+          --hidden-import noteforge_anki_studio.coverage \
+          --hidden-import noteforge_anki_studio.exporters \
+          --hidden-import noteforge_anki_studio.importers \
+          --hidden-import noteforge_anki_studio.models \
+          --hidden-import noteforge_anki_studio.prompts \
+          --hidden-import noteforge_anki_studio.storage \
+          --hidden-import noteforge_anki_studio.app \
+          --hidden-import webview \
+          --hidden-import webview.platforms.cocoa \
+          --hidden-import uvicorn.logging \
+          --hidden-import uvicorn.loops.auto \
+          --hidden-import uvicorn.protocols.http.auto \
+          --hidden-import uvicorn.protocols.websockets.auto \
+          --hidden-import uvicorn.lifespan.on \
+          --collect-all uvicorn \
+          --collect-all starlette \
+          --collect-all fastapi \
+          --collect-all mistune \
+          --collect-all markdownify \
+          --collect-all httpx \
+          --collect-all pydantic \
+          --collect-all jinja2 \
+          --collect-all PyYAML \
+          launcher_webview.py
+
+    - name: Verify build
+      run: |
+        if [ ! -d "dist/${{ env.APP_NAME }}.app" ] && [ ! -f "dist/${{ env.APP_NAME }}/${{ env.APP_NAME }}" ]; then
+          echo "${{ env.APP_NAME }} build not found!"
+          exit 1
+        fi
+
+    - name: Create DMG
+      run: |
+        mkdir -p dmg_temp
+        if [ -d "dist/${{ env.APP_NAME }}.app" ]; then
+          cp -r "dist/${{ env.APP_NAME }}.app" "dmg_temp/${{ env.APP_NAME }}.app"
+        else
+          cp -r "dist/${{ env.APP_NAME }}" "dmg_temp/${{ env.APP_NAME }}"
+        fi
+        hdiutil create -volname "${{ env.APP_NAME }}" -srcfolder dmg_temp -ov -format UDZO "${{ env.APP_NAME }}-macOS-arm64.dmg"
+
+    - name: Upload DMG
+      uses: actions/upload-artifact@v4
+      with:
+        name: nanki-macos
+        path: ${{ env.APP_NAME }}-macOS-arm64.dmg
+
+    - name: Attach to release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: ${{ env.APP_NAME }}-macOS-arm64.dmg
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

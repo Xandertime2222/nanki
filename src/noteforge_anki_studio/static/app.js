@@ -148,6 +148,7 @@ const I18N = {
     'coverage.unmappedCards': 'Cards without mapping',
     'coverage.ankiMatches': 'Matching Anki cards',
     'coverage.map': 'Coverage map',
+    'coverage.matchingCards': '{count} matching card(s)',
     'coverage.ankiMatched': '{count} matched in Anki',
     'coverage.ankiScanned': '{count} cards in Anki',
     'coverage.ankiUnavailable': 'Anki not available',
@@ -361,6 +362,7 @@ const I18N = {
     'coverage.unmappedCards': 'Karten ohne Zuordnung',
     'coverage.ankiMatches': 'Passende Anki-Karten',
     'coverage.map': 'Abdeckungsansicht',
+    'coverage.matchingCards': '{count} passende Karte(n)',
     'coverage.ankiMatched': '{count} Treffer in Anki',
     'coverage.ankiScanned': '{count} Karten in Anki',
     'coverage.ankiUnavailable': 'Anki nicht verfügbar',
@@ -578,11 +580,63 @@ const updateCoverageToggleButton = () => {
   els.toggleCoverageViewBtn.setAttribute('aria-pressed', String(state.coverageView));
 };
 
+const removeCoverageTooltip = () => {
+  const existing = document.getElementById('coverage-tooltip');
+  if (existing) existing.remove();
+};
+
+const showCoverageTooltip = (event) => {
+  const span = event.target.closest('.coverage-token.covered');
+  if (!span) { removeCoverageTooltip(); return; }
+  const cardIds = (span.dataset.cardIds || '').split(',').filter(Boolean);
+  if (!cardIds.length) { removeCoverageTooltip(); return; }
+  const report = state.coverageReport;
+  if (!report) return;
+
+  const allCards = report.cards || [];
+  const localCards = state.activeNote?.cards || [];
+  const localMap = Object.fromEntries(localCards.map(c => [c.id, c]));
+
+  const rows = cardIds.slice(0, 6).map(id => {
+    const reportCard = allCards.find(c => c.id === id);
+    const localCard = localMap[id];
+    const front = localCard?.front || reportCard?.front || id;
+    const back = localCard?.back || '';
+    const type = localCard?.type || reportCard?.type || (id.startsWith('anki:') ? 'Anki' : 'basic');
+    const origin = id.startsWith('anki:') ? 'Anki' : '';
+    return `<div class="coverage-tooltip-card">
+      <div class="coverage-tooltip-card-type">${escapeHtml(origin || type)}</div>
+      <div class="coverage-tooltip-card-front">${escapeHtml(front.slice(0, 100))}</div>
+      ${back ? `<div class="coverage-tooltip-card-back">${escapeHtml(back.slice(0, 80))}</div>` : ''}
+    </div>`;
+  }).join('');
+
+  const extra = cardIds.length > 6 ? `<div class="muted" style="font-size:0.75rem;margin-top:0.25rem">+${cardIds.length - 6} more</div>` : '';
+
+  removeCoverageTooltip();
+  const tooltip = document.createElement('div');
+  tooltip.id = 'coverage-tooltip';
+  tooltip.className = 'coverage-hover-tooltip';
+  tooltip.innerHTML = `<div class="coverage-tooltip-title">${escapeHtml(t('coverage.matchingCards', { count: cardIds.length }))}</div>${rows}${extra}`;
+  document.body.appendChild(tooltip);
+
+  const rect = span.getBoundingClientRect();
+  const tw = tooltip.offsetWidth || 300;
+  const th = tooltip.offsetHeight || 100;
+  let left = rect.left + rect.width / 2 - tw / 2;
+  left = Math.max(8, Math.min(window.innerWidth - tw - 8, left));
+  let top = rect.top - th - 8;
+  if (top < 8) top = rect.bottom + 8;
+  tooltip.style.left = `${left}px`;
+  tooltip.style.top = `${top}px`;
+};
+
 const renderEditorCoverageView = () => {
   if (!els.editorCoverageView || !els.editorShell) return;
   els.editorShell.classList.toggle('coverage-visible', state.coverageView);
   if (!state.coverageView) {
     els.editorCoverageView.classList.add('hidden');
+    removeCoverageTooltip();
     updateCoverageToggleButton();
     updateEditorEmptyState();
     return;
@@ -590,6 +644,12 @@ const renderEditorCoverageView = () => {
   els.editorCoverageView.classList.remove('hidden');
   const html = state.coverageReport?.coverage_html || '';
   els.editorCoverageView.innerHTML = html || `<div class="editor-coverage-empty"><span class="section-label">${escapeHtml(t('coverage.title'))}</span><div class="coverage-muted-empty">${escapeHtml(t('coverage.editorEmpty'))}</div></div>`;
+
+  els.editorCoverageView.addEventListener('mouseover', showCoverageTooltip);
+  els.editorCoverageView.addEventListener('mouseout', (e) => {
+    if (!e.relatedTarget?.closest?.('.coverage-token.covered')) removeCoverageTooltip();
+  });
+
   updateCoverageToggleButton();
   updateEditorEmptyState();
 };

@@ -486,7 +486,7 @@ class AIService:
         *,
         note: NoteDocument,
         source_text: str,
-        target_count: int,
+        target_count: int | None,
         auto: bool = False,
         model: str | None = None,
         include_anki_coverage: bool = True,
@@ -494,7 +494,9 @@ class AIService:
         source_text = (source_text or note.content).strip()
         if not source_text:
             raise AIServiceError("No source text was provided for card generation.")
-        target_count = max(1, min(24, int(target_count or 8)))
+        auto_count = target_count is None
+        if not auto_count:
+            target_count = max(1, min(48, int(target_count or 8)))
         coverage_context = await self._build_semantic_coverage_context(
             settings,
             note=note,
@@ -509,13 +511,20 @@ class AIService:
             "- Every returned card must contain source_excerpt copied verbatim from the provided source text.\n"
             "- If a card cannot be grounded in the source text, do not return it."
         )
-        user_payload = {
+        count_instruction = (
+            "Decide the optimal number of cards yourself based on the complexity and density of the source text."
+            if auto_count
+            else f"Generate approximately {target_count} cards."
+        )
+        user_payload: dict[str, Any] = {
             "task": "auto_flashcards" if auto else "flashcards",
-            "target_count": target_count,
+            "count_instruction": count_instruction,
             "note_title": note.meta.title,
             "source_text": source_text,
             "semantic_existing_card_context": coverage_context,
         }
+        if not auto_count:
+            user_payload["target_count"] = target_count
         content, selected_model, provider = await self._chat_completion(
             settings,
             task="auto_flashcards" if auto else "flashcards",

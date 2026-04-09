@@ -103,7 +103,8 @@
       'ai.explainUseNote': 'Use full note',
       'ai.explainRun': 'Explain now',
       'ai.cardsText': 'Source text',
-      'ai.cardsCount': 'Target card count',
+      'ai.cardsCount': 'Card count',
+      'ai.cardsCountAuto': 'Auto (AI decides)',
       'ai.cardsUseSelection': 'Use selection',
       'ai.cardsUseNote': 'Use full note',
       'ai.cardsGenerate': 'Generate cards',
@@ -183,7 +184,8 @@
       'ai.explainUseNote': 'Ganze Notiz verwenden',
       'ai.explainRun': 'Jetzt erklären',
       'ai.cardsText': 'Quelltext',
-      'ai.cardsCount': 'Zielanzahl Karten',
+      'ai.cardsCount': 'Kartenanzahl',
+      'ai.cardsCountAuto': 'Automatisch (KI entscheidet)',
       'ai.cardsUseSelection': 'Auswahl verwenden',
       'ai.cardsUseNote': 'Ganze Notiz verwenden',
       'ai.cardsGenerate': 'Karten generieren',
@@ -460,7 +462,14 @@
                 </label>
                 <label>
                   <span data-ai-i18n="ai.cardsCount"></span>
-                  <input id="ai-cards-count" type="number" min="1" max="24" value="8" />
+                  <select id="ai-cards-count">
+                    <option value="auto" data-ai-i18n="ai.cardsCountAuto">Auto</option>
+                    <option value="4">4</option>
+                    <option value="8" selected>8</option>
+                    <option value="12">12</option>
+                    <option value="16">16</option>
+                    <option value="24">24</option>
+                  </select>
                 </label>
               </div>
               <div class="toolbar-group wrap compact-top-gap">
@@ -926,7 +935,9 @@
     }
     await getApi().persistActiveNote?.({ quiet: true });
     await saveCurrentSettingsQuietly();
-    uiState.prefs.cardCount = Number(aiEls.aiCardsCount.value || uiState.prefs.cardCount || 8);
+    const countValue = aiEls.aiCardsCount.value;
+    const isAutoCount = countValue === 'auto';
+    uiState.prefs.cardCount = isAutoCount ? 'auto' : Number(countValue || 8);
     savePrefs();
     try {
       aiEls.aiCardsMeta.textContent = '…';
@@ -935,7 +946,7 @@
         body: JSON.stringify({
           note_id: note.meta.id,
           source_text: text,
-          target_count: Math.max(1, Math.min(24, Number(aiEls.aiCardsCount.value || 8))),
+          target_count: isAutoCount ? null : Math.max(1, Math.min(48, Number(countValue || 8))),
           auto,
           model: auto ? (ensureAiSettings().auto_flashcard_model || ensureAiSettings().default_model || null) : (ensureAiSettings().flashcard_model || ensureAiSettings().default_model || null),
           include_anki_coverage: Boolean(ensureAiSettings().use_anki_coverage_context),
@@ -1056,7 +1067,7 @@
     aiEls.aiCardsGenerateBtn?.addEventListener('click', () => generateCards({ auto: false }));
     aiEls.aiCardsAutoBtn?.addEventListener('click', () => generateCards({ auto: true }));
     aiEls.aiCardsSaveAllBtn?.addEventListener('click', () => saveGeneratedCards());
-    aiEls.aiCardsCount.value = String(uiState.prefs.cardCount || 8);
+    aiEls.aiCardsCount.value = String(uiState.prefs.cardCount ?? 8);
     aiEls.aiCardsCount?.addEventListener('change', () => {
       uiState.prefs.cardCount = Number(aiEls.aiCardsCount.value || 8);
       savePrefs();
