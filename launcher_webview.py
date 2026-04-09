@@ -43,16 +43,13 @@ def main():
     server_thread = threading.Thread(target=start_server, daemon=True)
     server_thread.start()
     
-    # Create native desktop window
+    # Create native desktop window (use only supported parameters)
     window = webview.create_window(
         title='Nanki - Study Workspace',
         url=url,
         width=1400,
         height=900,
-        min_size=(900, 600),
         resizable=True,
-        frame=True,
-        easy_drag=False,
     )
     
     # Start the webview event loop (this blocks until window is closed)

@@ -51,6 +51,7 @@ jobs:
         Name "${PRODUCT_NAME}"
         OutFile "Nanki-Desktop-Setup.exe"
         InstallDir "$PROGRAMFILES64\Nanki"
+        InstallDirRegKey HKLM "Software\Nanki" "Install_Dir"
         RequestExecutionLevel admin
         
         !include "MUI2.nsh"
@@ -62,16 +63,34 @@ jobs:
         
         !insertmacro MUI_LANGUAGE "English"
         
-        Section "Install"
+        Function .onInit
+          ; Check if already installed
+          ReadRegStr $0 HKLM "Software\Nanki" "Install_Dir"
+          StrCmp $0 "" done
+          ; Uninstall previous version
+          IfFileExists "$0\Uninstall.exe" 0 done
+          ExecWait '"$0\Uninstall.exe" /S _?=$0'
+          done:
+        FunctionEnd
+        
+        Section "Install" SecInstall
           SetOutPath "$INSTDIR"
           File /r "dist\Nanki\*.*"
+          
           CreateDirectory "$SMPROGRAMS\Nanki"
           CreateShortcut "$SMPROGRAMS\Nanki\Nanki.lnk" "$INSTDIR\Nanki.exe"
           CreateShortcut "$DESKTOP\Nanki.lnk" "$INSTDIR\Nanki.exe"
+          
           WriteUninstaller "$INSTDIR\Uninstall.exe"
+          WriteRegStr HKLM "Software\Nanki" "Install_Dir" "$INSTDIR"
+          WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Nanki" "DisplayName" "Nanki"
+          WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Nanki" "UninstallString" "$INSTDIR\Uninstall.exe"
+          WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Nanki" "DisplayIcon" "$INSTDIR\Nanki.exe"
+          WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Nanki" "Publisher" "Nanki Project"
+          WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Nanki" "DisplayVersion" "0.3.1"
         SectionEnd
         
-        Section "Uninstall"
+        Section "Uninstall" SecUninstall
           Delete "$INSTDIR\Uninstall.exe"
           Delete "$INSTDIR\Nanki.exe"
           RMDir /r "$INSTDIR\_internal"
@@ -79,6 +98,8 @@ jobs:
           Delete "$DESKTOP\Nanki.lnk"
           Delete "$SMPROGRAMS\Nanki\Nanki.lnk"
           RMDir "$SMPROGRAMS\Nanki"
+          DeleteRegKey HKLM "Software\Nanki"
+          DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\Nanki"
         SectionEnd
         '@
         Set-Content -Path "build.nsi" -Value $nsisContent
