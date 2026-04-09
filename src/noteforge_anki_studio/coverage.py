@@ -559,14 +559,13 @@ def coverage_html(content: str, sentences: list[Sentence], sentence_cards: list[
                 src_cls = " local"
             multi_cls = " multi" if len(card_ids) > 1 else ""
             ids = ",".join(sorted(card_ids))
-            title = html.escape(f"Covered by {len(card_ids)} card(s)")
             parts.append(
                 f'<span class="coverage-token covered{multi_cls}{src_cls}" '
-                f'data-card-ids="{ids}" title="{title}">{sent_html}</span>'
+                f'data-card-ids="{ids}">{sent_html}</span>'
             )
         else:
             parts.append(
-                f'<span class="coverage-token uncovered" title="No linked card">{sent_html}</span>'
+                f'<span class="coverage-token uncovered">{sent_html}</span>'
             )
 
         cursor = sent.end
@@ -732,11 +731,14 @@ def build_card_result(
                 section_title_sec = section_for_offset(sections, first_sent.start) if sections else None
                 section_title = section_title_sec.title if section_title_sec else None
 
+    back_text = plain_card_text(str(card_attr(card, "back", "")))
+
     payload: dict[str, Any] = {
         "id": str(card_attr(card, "id", "")),
         "type": str(card_attr(card, "type", "basic")),
         "origin": card_origin(card),
-        "front": _excerpt(front_text, limit=80),
+        "front": _excerpt(front_text, limit=120),
+        "back": _excerpt(back_text, limit=100),
         "deck_name": str(card_attr(card, "deck_name", "Default")),
         "mapped": mapped,
         "method": method,

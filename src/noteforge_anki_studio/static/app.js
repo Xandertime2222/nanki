@@ -585,29 +585,40 @@ const removeCoverageTooltip = () => {
   if (existing) existing.remove();
 };
 
+const buildCoverageCardIndex = () => {
+  const index = {};
+  for (const card of (state.coverageReport?.cards || [])) {
+    if (card.id) index[card.id] = card;
+  }
+  for (const card of (state.activeNote?.cards || [])) {
+    if (card.id && !index[card.id]) index[card.id] = card;
+    else if (card.id) {
+      index[card.id] = { ...index[card.id], front: card.front, back: card.back, type: card.type };
+    }
+  }
+  return index;
+};
+
 const showCoverageTooltip = (event) => {
   const span = event.target.closest('.coverage-token.covered');
   if (!span) { removeCoverageTooltip(); return; }
   const cardIds = (span.dataset.cardIds || '').split(',').filter(Boolean);
   if (!cardIds.length) { removeCoverageTooltip(); return; }
-  const report = state.coverageReport;
-  if (!report) return;
+  if (!state.coverageReport) return;
 
-  const allCards = report.cards || [];
-  const localCards = state.activeNote?.cards || [];
-  const localMap = Object.fromEntries(localCards.map(c => [c.id, c]));
+  const cardIndex = buildCoverageCardIndex();
 
   const rows = cardIds.slice(0, 6).map(id => {
-    const reportCard = allCards.find(c => c.id === id);
-    const localCard = localMap[id];
-    const front = localCard?.front || reportCard?.front || id;
-    const back = localCard?.back || '';
-    const type = localCard?.type || reportCard?.type || (id.startsWith('anki:') ? 'Anki' : 'basic');
-    const origin = id.startsWith('anki:') ? 'Anki' : '';
+    const card = cardIndex[id];
+    const front = card?.front || id;
+    const back = card?.back || '';
+    const type = card?.type || (id.startsWith('anki:') ? 'Anki' : 'basic');
+    const origin = id.startsWith('anki:') ? 'Anki' : (card?.deck_name || '');
+    const badge = origin ? `<span class="pill" style="font-size:0.625rem;padding:0.1rem 0.35rem">${escapeHtml(origin)}</span>` : '';
     return `<div class="coverage-tooltip-card">
-      <div class="coverage-tooltip-card-type">${escapeHtml(origin || type)}</div>
-      <div class="coverage-tooltip-card-front">${escapeHtml(front.slice(0, 100))}</div>
-      ${back ? `<div class="coverage-tooltip-card-back">${escapeHtml(back.slice(0, 80))}</div>` : ''}
+      <div class="coverage-tooltip-card-type">${escapeHtml(type)} ${badge}</div>
+      <div class="coverage-tooltip-card-front">${escapeHtml(front.slice(0, 120))}</div>
+      ${back ? `<div class="coverage-tooltip-card-back">${escapeHtml(back.slice(0, 100))}</div>` : ''}
     </div>`;
   }).join('');
 
