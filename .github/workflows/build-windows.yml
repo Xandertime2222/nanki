@@ -1,0 +1,108 @@
+name: Build Windows Installer
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e .
+        pip install pyinstaller
+        
+    - name: Build with PyInstaller
+      run: |
+        pyinstaller `
+          --name Nanki `
+          --windowed `
+          --add-data "src/noteforge_anki_studio/static;noteforge_anki_studio/static" `
+          --add-data "src/noteforge_anki_studio/templates;noteforge_anki_studio/templates" `
+          --hidden-import uvicorn.logging `
+          --hidden-import uvicorn.loops.auto `
+          --hidden-import uvicorn.protocols.http.auto `
+          --hidden-import uvicorn.protocols.websockets.auto `
+          --hidden-import uvicorn.lifespan.on `
+          --collect-all uvicorn `
+          --collect-all starlette `
+          --collect-all fastapi `
+          --collect-all mistune `
+          --collect-all markdownify `
+          src/noteforge_anki_studio/__main__.py
+          
+    - name: Upload build artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: nanki-windows-build
+        path: dist/Nanki/
+        
+    - name: Setup NSIS
+      run: choco install nsis
+      
+    - name: Create Installer
+      run: |
+        # Create NSIS script
+        @"
+        Name `"Nanki 0.3.0`"
+        OutFile `"dist\Nanki-Setup.exe`"
+        InstallDir `"`$PROGRAMFILES64\Nanki`"
+        RequestExecutionLevel admin
+        
+        !include `"MUI2.nsh`"
+        !insertmacro MUI_PAGE_WELCOME
+        !insertmacro MUI_PAGE_DIRECTORY
+        !insertmacro MUI_PAGE_INSTFILES
+        !define MUI_FINISHPAGE_RUN `"`$INSTDIR\Nanki.exe`"
+        !insertmacro MUI_PAGE_FINISH
+        !insertmacro MUI_LANGUAGE `"English`"
+        
+        Section `"Install`"
+          SetOutPath `"`$INSTDIR`"
+          File /r `"dist\Nanki\*.*`"
+          CreateDirectory `"`$SMPROGRAMS\Nanki`"
+          CreateShortcut `"`$SMPROGRAMS\Nanki\Nanki.lnk`" `"`$INSTDIR\Nanki.exe`"
+          CreateShortcut `"`$DESKTOP\Nanki.lnk`" `"`$INSTDIR\Nanki.exe`"
+          WriteUninstaller `"`$INSTDIR\uninstall.exe`"
+        SectionEnd
+        
+        Section `"Uninstall`"
+          Delete `"`$INSTDIR\Nanki.exe`"
+          Delete `"`$INSTDIR\uninstall.exe`"
+          RMDir /r `"`$INSTDIR\_internal`"
+          Delete `"`$DESKTOP\Nanki.lnk`"
+          Delete `"`$SMPROGRAMS\Nanki\Nanki.lnk`"
+          RMDir `"`$SMPROGRAMS\Nanki`"
+          RMDir `"`$INSTDIR`"
+        SectionEnd
+        "@ | Out-File -FilePath build.nsi -Encoding UTF8
+        
+        # Build installer
+        makensis build.nsi
+        
+    - name: Upload Installer
+      uses: actions/upload-artifact@v4
+      with:
+        name: nanki-setup
+        path: dist/Nanki-Setup.exe
+        
+    - name: Create Release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: dist/Nanki-Setup.exe
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
