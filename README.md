@@ -1,102 +1,183 @@
-# Nanki
+<!-- Nanki Logo -->
+<p align="center">
+  <img src="src/noteforge_anki_studio/static/nanki-logo.svg" alt="Nanki" width="120">
+</p>
 
-Nanki is a local-first study workspace that keeps notes and flashcards in one flow.
+<h1 align="center">Nanki</h1>
 
-You write in a rich-text note editor, select text directly from notes or imported material, and turn it into flashcards without leaving the note. Notes are still stored as real Markdown files on disk, but the main UI hides raw Markdown while you work.
+<p align="center">
+  <b>Local-first study workspace.</b><br>
+  Notes, flashcards & AI — in one seamless flow.
+</p>
 
-## Core ideas
+<p align="center">
+  <a href="#features">Features</a> •
+  <a href="#installation">Installation</a> •
+  <a href="#usage">Usage</a> •
+  <a href="#anki-integration">Anki</a> •
+  <a href="#ai-features">AI</a>
+</p>
 
-- real note storage in `note.md`
-- per-note flashcards in `cards.json`
-- direct AnkiConnect push
-- import for PDF, Markdown, plain text, and PowerPoint `.pptx`
-- note coverage based on:
-  - local Nanki cards
-  - all cards available through AnkiConnect
-- German / English interface
-- minimal browser UI inspired by native macOS app patterns
+---
 
-## Project structure
+## Features
 
-```text
-workspace/
-  notes/
-    <note-id>/
-      note.md
-      cards.json
-      source-manifest.json
-      source/
-        original imported file
-  exports/
-    generated csv/txt/apkg files
-```
+### ✍️ Rich Note Editor
+- Write in a clean, distraction-free editor
+- **Real Markdown storage** — your notes live as actual `.md` files
+- Import from **PDF, Markdown, plain text, PowerPoint (.pptx)**
 
-## Run locally
+### ⚡ Instant Flashcards
+- Select any text → create **Basic** or **Cloze** cards instantly
+- Cards linked to source excerpts for context
+- Push directly to **Anki** via AnkiConnect
+
+### 🤖 AI-Powered Learning
+- **Chat** with your notes using OpenAI/compatible APIs
+- Get **explanations** for selected text
+- **Auto-generate** flashcards from notes (with coverage-aware context)
+
+### 📊 Coverage Analysis
+- Know exactly what you've covered: percentage, sections, gaps
+- Matches local Nanki cards + your entire Anki library
+- Works offline with local cards only
+
+### 🌍 Bilingual
+- **German & English** interface
+- Language-aware AI interactions
+
+---
+
+## Installation
+
+### Requirements
+- Python 3.11+
+- Anki (optional, for sync) with [AnkiConnect](https://github.com/FooSoft/anjiconnect) add-on
+
+### Quick Start
 
 ```bash
+# Clone the repository
+git clone https://github.com/Xandertime2222/nanki.git
+cd nanki
+
+# Create virtual environment
 python -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install Nanki
 pip install -e .
+
+# Launch
 nanki
 ```
 
-Legacy command still works too:
+The app starts at `http://127.0.0.1:7788` and opens automatically in your browser.
 
-```bash
-noteforge-anki-studio
+---
+
+## Usage
+
+### Your First Note
+
+```
+workspace/
+└── notes/
+    └── <note-id>/
+        ├── note.md              # Your Markdown note
+        ├── cards.json           # Associated flashcards
+        ├── source-manifest.json # Import metadata
+        └── source/
+            └── original.pdf     # Imported files
 ```
 
-The app starts a local FastAPI server and opens in your browser.
+### Creating Cards
+1. **Select text** in your note
+2. Click the selection bubble: **Basic** or **Cloze**
+3. Edit in the card drawer
+4. Push to Anki or export as `.apkg`, CSV, or Anki text
 
-Default URL:
+### Keyboard Shortcuts
+- All editing is in-browser with intuitive controls
+- Pin important notes to the top of your workspace
 
-```text
-http://127.0.0.1:7788
+---
+
+## Anki Integration
+
+Nanki negotiates AnkiConnect API version at runtime and uses:
+
+| Endpoint | Purpose |
+|----------|---------|
+| `deckNames` / `modelNames` | List available decks |
+| `createDeck` | Create new decks on demand |
+| `canAddNotes` / `addNotes` | Push cards to Anki |
+| `findCards` / `cardsInfo` | Coverage analysis |
+| `sync` | Trigger Anki sync |
+
+**Anki offline?** No problem — coverage falls back to local Nanki cards only.
+
+---
+
+## AI Features
+
+Enable AI via Settings (⚙️ icon):
+
+| Feature | What it does |
+|---------|--------------|
+| **Chat** | Conversational Q&A about your notes |
+| **Explain** | Get clarifications for selected text |
+| **Generate Cards** | Auto-create flashcards with smart coverage context |
+
+Supports OpenAI-compatible APIs (OpenAI, local models via compatible endpoints).
+
+---
+
+## Project Structure
+
+```
+nanki/
+├── src/noteforge_anki_studio/
+│   ├── app.py              # FastAPI application
+│   ├── static/             # CSS, JS, logo
+│   ├── templates/          # HTML templates
+│   ├── ai.py               # AI service
+│   ├── anki_connect.py     # AnkiConnect client
+│   ├── coverage.py         # Coverage analysis
+│   ├── exporters.py        # CSV, txt, apkg export
+│   ├── importers.py        # PDF, PPTX, MD import
+│   ├── models.py           # Pydantic models
+│   ├── storage.py          # File-based storage
+│   └── config.py           # Settings management
+├── tests/
+│   └── test_smoke.py
+├── pyproject.toml
+├── README.md
+└── LICENSE (MIT)
 ```
 
-## What is included
+---
 
-- rich note editor with Markdown storage in the background
-- fast selection bubble for Basic / Cloze card creation
-- card drawer for editing and pushing to Anki
-- CSV, Anki text, and `.apkg` export
-- settings overlay for:
-  - workspace path
-  - AnkiConnect URL
-  - deck/model refresh
-  - language selection
-  - auto-sync
-- coverage panel with:
-  - overall percentage
-  - section coverage
-  - gaps
-  - unmatched local cards
-  - matching cards from the Anki library
-  - inline coverage map
-
-## Notes on AnkiConnect
-
-Nanki negotiates the AnkiConnect API version at runtime and uses:
-
-- `deckNames`
-- `modelNames`
-- `createDeck`
-- `canAddNotes`
-- `addNotes`
-- `sync`
-- `findCards`
-- `cardsInfo`
-
-The coverage workflow can enrich note coverage with the cards currently available in Anki. If Anki is offline, coverage falls back to the local Nanki cards only.
-
-## Publish / package
+## Building
 
 ```bash
+# Build distributable package
 python -m build
+
+# For desktop packaging, consider:
+# - PyInstaller
+# - Briefcase
+# - Native webview wrapper
 ```
 
-A desktop wrapper can be added with PyInstaller, Briefcase, or a native webview shell.
+---
 
 ## License
 
-MIT
+MIT © 2025 Nanki Project
+
+---
+
+<p align="center">
+  <sub>Study smarter. Remember longer.</sub>
+</p>
