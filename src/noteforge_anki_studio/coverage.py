@@ -1,3 +1,12 @@
+"""Sentence-level coverage analysis for Nanki.
+
+Instead of word-level tokenization (which inflates coverage through single-word
+matches and overly broad semantic windows), this module splits note content into
+sentences and checks whether each sentence is meaningfully covered by at least
+one flashcard.  The result is a far more accurate picture of what the user has
+actually turned into study material.
+"""
+
 from __future__ import annotations
 
 import html
@@ -8,62 +17,73 @@ from typing import Any, Iterable
 from .anki_connect import AnkiLibraryCard
 from .models import Card, CoverageAnchor, NoteDocument
 
-WORD_PATTERN = re.compile(r"\b\w+\b", re.UNICODE)
+# ---------------------------------------------------------------------------
+# Patterns
+# ---------------------------------------------------------------------------
+
 HEADING_PATTERN = re.compile(r"^(#{1,6})[ \t]+(.+?)\s*$", re.MULTILINE)
 CLOZE_PATTERN = re.compile(r"\{\{c\d+::(.*?)(?:::(.*?))?\}\}")
 HTML_TAG_PATTERN = re.compile(r"<[^>]+>")
-MARKDOWN_BRIDGE_CHARS = r"\s*_~`>#\[\]()!|"
-COMMON_TERMS = {
-    "about",
-    "also",
-    "because",
-    "between",
-    "dieser",
-    "diese",
-    "dieses",
-    "durch",
-    "eine",
-    "einer",
-    "eines",
-    "einem",
-    "einen",
-    "europe",
-    "have",
-    "into",
-    "that",
-    "their",
-    "there",
-    "they",
-    "this",
-    "what",
-    "when",
-    "where",
-    "which",
-    "with",
-    "your",
-    "from",
-    "oder",
-    "und",
-    "ist",
-    "sind",
-    "der",
-    "die",
-    "das",
-    "for",
-    "and",
-    "the",
-    "ein",
-    "eine",
-}
+WORD_PATTERN = re.compile(r"\b\w+\b", re.UNICODE)
+
+# Sentence boundary detection uses a function-based approach to avoid
+# variable-width lookbehind limitations.
+SENTENCE_BOUNDARY = re.compile(r"([.!?])\s+(?=[A-ZÄÖÜÉÈÊ0-9(\"„«\[])", re.UNICODE)
+PARAGRAPH_BREAK = re.compile(r"\n\s*\n")
+ABBREVIATIONS = frozenset({
+    "z", "etc", "dr", "nr", "abb", "kap", "vgl", "ca", "mr", "ms", "vs",
+    "prof", "bzw", "bsp", "inkl", "ggf", "evtl", "usw", "sog",
+})
+
+# ---------------------------------------------------------------------------
+# Stop words (EN + DE) – filtered from keyword extraction
+# ---------------------------------------------------------------------------
+
+STOP_WORDS: frozenset[str] = frozenset({
+    # English
+    "the", "and", "for", "are", "but", "not", "you", "all", "can", "was",
+    "one", "our", "out", "had", "has", "its", "say", "she", "too", "use",
+    "who", "how", "did", "get", "may", "him", "his", "now", "see", "two",
+    "also", "back", "been", "from", "have", "here", "just", "know", "like",
+    "look", "make", "many", "more", "much", "must", "only", "over", "some",
+    "such", "take", "than", "that", "them", "then", "they", "this", "time",
+    "very", "want", "well", "what", "when", "which", "will", "with", "your",
+    "about", "could", "first", "into", "most", "other", "their", "there",
+    "these", "think", "those", "under", "where", "would", "being", "does",
+    "each", "every", "given", "made", "same", "should", "since", "still",
+    "while",
+    # German
+    "der", "die", "das", "ein", "eine", "einer", "eines", "einem", "einen",
+    "und", "ist", "sind", "war", "hat", "haben", "wird", "werden", "kann",
+    "mit", "von", "auf", "für", "nicht", "sich", "bei", "aus", "nach",
+    "wie", "als", "aber", "oder", "wenn", "auch", "noch", "nur", "über",
+    "vor", "bis", "durch", "unter", "gegen", "ohne", "zwischen", "dieser",
+    "diese", "dieses", "diesem", "diesen", "jeder", "jede", "jedes",
+    "kein", "keine", "keiner", "keines", "hier", "dort", "dann", "weil",
+    "dass", "denn", "zum", "zur", "dem", "den", "des", "was", "wer",
+    "man", "sehr", "schon", "immer", "wieder", "mehr", "viel", "andere",
+    "anderen", "anderer", "anderes", "anderem", "also", "bereits", "dabei",
+    "damit", "dazu", "jedoch", "sowie", "werden", "wurden", "wird", "wurde",
+    "können", "soll", "sollen", "muss", "müssen", "darf", "dürfen",
+})
 
 CardLike = Card | AnkiLibraryCard
 
+# Backward-compat aliases used by ai.py
+COMMON_TERMS = STOP_WORDS
+
+# ---------------------------------------------------------------------------
+# Data classes
+# ---------------------------------------------------------------------------
+
 
 @dataclass(slots=True)
-class Token:
+class Sentence:
+    text: str
     start: int
     end: int
-    text: str
+    is_heading: bool = False
+    is_content: bool = True  # False for empty / whitespace-only
 
 
 @dataclass(slots=True)
@@ -75,25 +95,17 @@ class Section:
 
 
 @dataclass(slots=True)
-class ResolvedRange:
-    start: int
-    end: int
-    method: str
-    selected_text: str
-
-
-@dataclass(slots=True)
-class RangeMatch:
-    start: int
-    end: int
+class SentenceMapping:
+    """Which card covers which sentence, and how confidently."""
+    sentence_index: int
+    card_id: str
+    confidence: float
     method: str
 
 
-@dataclass(slots=True)
-class SemanticWindow:
-    start: int
-    end: int
-    keywords: set[str]
+# ---------------------------------------------------------------------------
+# Text helpers
+# ---------------------------------------------------------------------------
 
 
 def normalize_space(text: str) -> str:
@@ -101,10 +113,7 @@ def normalize_space(text: str) -> str:
 
 
 def strip_cloze_markup(text: str) -> str:
-    def _replace(match: re.Match[str]) -> str:
-        return match.group(1) or ""
-
-    return CLOZE_PATTERN.sub(_replace, text or "")
+    return CLOZE_PATTERN.sub(lambda m: m.group(1) or "", text or "")
 
 
 def strip_html(text: str) -> str:
@@ -115,47 +124,168 @@ def plain_card_text(text: str) -> str:
     return normalize_space(strip_html(strip_cloze_markup(text or "")))
 
 
-def iter_tokens(content: str) -> list[Token]:
-    return [Token(start=m.start(), end=m.end(), text=m.group(0)) for m in WORD_PATTERN.finditer(content)]
+def has_alpha(text: str) -> bool:
+    return any(c.isalpha() for c in (text or ""))
+
+
+# ---------------------------------------------------------------------------
+# Keyword & n-gram extraction
+# ---------------------------------------------------------------------------
+
+
+def extract_keywords(text: str) -> set[str]:
+    """Return meaningful lowercase keywords, filtering stop words."""
+    words = WORD_PATTERN.findall(text.lower())
+    return {w for w in words if len(w) >= 3 and w not in STOP_WORDS and has_alpha(w)}
+
+
+def extract_bigrams(text: str) -> set[tuple[str, str]]:
+    """Extract consecutive-word pairs (bigrams) from text."""
+    words = [w.lower() for w in WORD_PATTERN.findall(text) if len(w) >= 2 and has_alpha(w)]
+    return {(words[i], words[i + 1]) for i in range(len(words) - 1)}
+
+
+def extract_trigrams(text: str) -> set[tuple[str, str, str]]:
+    """Extract consecutive-word triples (trigrams) from text."""
+    words = [w.lower() for w in WORD_PATTERN.findall(text) if len(w) >= 2 and has_alpha(w)]
+    return {(words[i], words[i + 1], words[i + 2]) for i in range(len(words) - 2)}
+
+
+# ---------------------------------------------------------------------------
+# Sentence splitting
+# ---------------------------------------------------------------------------
+
+
+def _is_abbreviation(text: str, dot_pos: int) -> bool:
+    """Check if a period at dot_pos is part of an abbreviation."""
+    # Walk backward to find the word before the dot
+    i = dot_pos - 1
+    while i >= 0 and text[i].isalpha():
+        i -= 1
+    word = text[i + 1:dot_pos].lower()
+    if word in ABBREVIATIONS:
+        return True
+    # Single-letter abbreviation (e.g. "z. B.", "S. 4")
+    if len(word) <= 1 and word.isalpha():
+        return True
+    return False
+
+
+def _split_text_block(text: str, offset: int) -> list[Sentence]:
+    """Split a text block (no headings) into sentences."""
+    if not text.strip():
+        return []
+
+    # First split on paragraph breaks
+    paragraphs: list[tuple[int, str]] = []
+    last = 0
+    for m in PARAGRAPH_BREAK.finditer(text):
+        paragraphs.append((last, text[last:m.start()]))
+        last = m.end()
+    paragraphs.append((last, text[last:]))
+
+    result: list[Sentence] = []
+    for para_offset, para in paragraphs:
+        if not para.strip():
+            continue
+        # Split paragraph into sentences at .!? followed by uppercase
+        boundaries: list[int] = []
+        for m in SENTENCE_BOUNDARY.finditer(para):
+            punct_pos = m.start()
+            if m.group(1) == "." and _is_abbreviation(para, punct_pos):
+                continue
+            # Split point is right after the punctuation
+            boundaries.append(punct_pos + 1)
+
+        # Build sentence spans
+        starts = [0] + boundaries
+        ends = boundaries + [len(para)]
+        for s, e in zip(starts, ends):
+            chunk = para[s:e].strip()
+            if not chunk:
+                continue
+            # Find actual position in para (preserving whitespace offsets)
+            actual_start = para_offset + s
+            actual_end = para_offset + e
+            abs_start = offset + actual_start
+            abs_end = offset + actual_end
+            result.append(Sentence(
+                text=chunk,
+                start=abs_start,
+                end=abs_end,
+                is_heading=False,
+                is_content=len(chunk) >= 4 and has_alpha(chunk),
+            ))
+
+    return result
+
+
+def split_sentences(content: str) -> list[Sentence]:
+    """Split content into sentence-level chunks.
+
+    Headings become their own sentence (is_heading=True).
+    Very short or whitespace-only chunks are marked is_content=False.
+    """
+    if not content or not content.strip():
+        return []
+
+    heading_spans: list[tuple[int, int, str, int]] = []
+    for m in HEADING_PATTERN.finditer(content):
+        heading_spans.append((m.start(), m.end(), normalize_space(m.group(2)), len(m.group(1))))
+
+    sentences: list[Sentence] = []
+    cursor = 0
+
+    for h_start, h_end, h_title, h_level in heading_spans:
+        if cursor < h_start:
+            sentences.extend(_split_text_block(content[cursor:h_start], cursor))
+        sentences.append(Sentence(
+            text=h_title,
+            start=h_start,
+            end=h_end,
+            is_heading=True,
+            is_content=False,
+        ))
+        cursor = h_end
+
+    if cursor < len(content):
+        sentences.extend(_split_text_block(content[cursor:], cursor))
+
+    return sentences
+
+
+# ---------------------------------------------------------------------------
+# Section parsing  (unchanged API, needed for backward compat)
+# ---------------------------------------------------------------------------
 
 
 def parse_sections(content: str) -> list[Section]:
     headings = [
-        Section(title=normalize_space(m.group(2)), level=len(m.group(1)), start=m.start(), end=m.end())
+        Section(title=normalize_space(m.group(2)), level=len(m.group(1)),
+                start=m.start(), end=m.end())
         for m in HEADING_PATTERN.finditer(content)
     ]
     if not headings:
         return [Section(title="Full note", level=1, start=0, end=len(content))]
-
     sections: list[Section] = []
-    if normalize_space(content[: headings[0].start]):
+    if normalize_space(content[:headings[0].start]):
         sections.append(Section(title="Introduction", level=1, start=0, end=headings[0].start))
-    for index, heading in enumerate(headings):
-        next_start = headings[index + 1].start if index + 1 < len(headings) else len(content)
-        sections.append(Section(title=heading.title, level=heading.level, start=heading.start, end=next_start))
+    for i, h in enumerate(headings):
+        next_start = headings[i + 1].start if i + 1 < len(headings) else len(content)
+        sections.append(Section(title=h.title, level=h.level, start=h.start, end=next_start))
     return sections
 
 
 def section_for_offset(sections: list[Section], offset: int) -> Section | None:
-    for section in sections:
-        if section.start <= offset < section.end:
-            return section
+    for s in sections:
+        if s.start <= offset < s.end:
+            return s
     return sections[-1] if sections else None
 
 
-def unique_preserve_order(values: Iterable[str]) -> list[str]:
-    seen: set[str] = set()
-    output: list[str] = []
-    for value in values:
-        normalized = normalize_space(value)
-        if not normalized:
-            continue
-        key = normalized.casefold()
-        if key in seen:
-            continue
-        seen.add(key)
-        output.append(normalized)
-    return output
+# ---------------------------------------------------------------------------
+# Card text extraction
+# ---------------------------------------------------------------------------
 
 
 def card_attr(card: CardLike, name: str, default: Any = "") -> Any:
@@ -166,449 +296,459 @@ def card_origin(card: CardLike) -> str:
     return str(card_attr(card, "origin", "local"))
 
 
-def card_search_candidates(card: CardLike) -> list[str]:
+def card_texts(card: CardLike) -> list[str]:
+    """Return all meaningful text fragments from a card."""
     anchor = card_attr(card, "coverage_anchor", None)
     anchor_text = anchor.selected_text if isinstance(anchor, CoverageAnchor) else ""
     front = plain_card_text(card_attr(card, "front", ""))
     back = plain_card_text(card_attr(card, "back", ""))
     extra = plain_card_text(card_attr(card, "extra", ""))
     source_excerpt = plain_card_text(card_attr(card, "source_excerpt", ""))
-    candidates = unique_preserve_order([anchor_text, source_excerpt, front, back, extra])
-    return [candidate for candidate in candidates if len(candidate) >= 3]
-
-
-def exact_matches(content: str, excerpt: str) -> list[RangeMatch]:
-    matches: list[RangeMatch] = []
-    start = 0
-    while True:
-        index = content.find(excerpt, start)
-        if index == -1:
-            break
-        matches.append(RangeMatch(start=index, end=index + len(excerpt), method="exact"))
-        start = index + 1
-    return matches
-
-
-def casefold_matches(content: str, excerpt: str) -> list[RangeMatch]:
-    matches: list[RangeMatch] = []
-    content_folded = content.casefold()
-    excerpt_folded = excerpt.casefold()
-    start = 0
-    while True:
-        index = content_folded.find(excerpt_folded, start)
-        if index == -1:
-            break
-        matches.append(RangeMatch(start=index, end=index + len(excerpt), method="casefold"))
-        start = index + 1
-    return matches
-
-
-def regex_matches(content: str, excerpt: str, *, allow_markdown_bridges: bool = False) -> list[RangeMatch]:
-    excerpt = excerpt.strip()
-    if not excerpt:
-        return []
-    parts = [re.escape(part) for part in re.split(r"\s+", excerpt) if part]
-    if not parts:
-        return []
-    if allow_markdown_bridges:
-        bridge = f"(?:[{MARKDOWN_BRIDGE_CHARS}]+)"
-        pattern_str = bridge.join(parts)
-        method = "markdown-bridge"
-    else:
-        pattern_str = r"\s+".join(parts)
-        method = "whitespace"
-    try:
-        pattern = re.compile(pattern_str, re.MULTILINE)
-    except re.error:
-        return []
-    return [RangeMatch(start=m.start(), end=m.end(), method=method) for m in pattern.finditer(content)]
-
-
-def gather_excerpt_matches(content: str, excerpt: str) -> list[RangeMatch]:
-    excerpt = excerpt.strip()
-    if not excerpt:
-        return []
-    for matches in (
-        exact_matches(content, excerpt),
-        casefold_matches(content, excerpt),
-        regex_matches(content, excerpt, allow_markdown_bridges=False),
-        regex_matches(content, excerpt, allow_markdown_bridges=True),
-    ):
-        if matches:
-            deduped: dict[tuple[int, int], RangeMatch] = {}
-            for match in matches:
-                deduped[(match.start, match.end)] = match
-            return list(deduped.values())
-    return []
-
-
-def locate_section_by_title(sections: list[Section], locator: str) -> list[Section]:
-    normalized = normalize_space(locator).casefold()
-    if not normalized:
-        return []
-    exact = [section for section in sections if section.title.casefold() == normalized]
-    if exact:
-        return exact
-    return [section for section in sections if normalized in section.title.casefold()]
-
-
-def score_match(content: str, match: RangeMatch, prefix_text: str, suffix_text: str) -> int:
-    score = 0
-    prefix = normalize_space(prefix_text)
-    suffix = normalize_space(suffix_text)
-    if prefix:
-        before = normalize_space(content[max(0, match.start - max(180, len(prefix) + 16)) : match.start])
-        if before.endswith(prefix):
-            score += 3
-        elif prefix in before:
-            score += 1
-    if suffix:
-        after = normalize_space(content[match.end : min(len(content), match.end + max(180, len(suffix) + 16))])
-        if after.startswith(suffix):
-            score += 3
-        elif suffix in after:
-            score += 1
-    return score
-
-
-def match_from_anchor(content: str, sections: list[Section], anchor: CoverageAnchor | None, locator: str = "") -> ResolvedRange | None:
-    if anchor is None:
-        return None
-    selected_text = normalize_space(anchor.selected_text)
-    if anchor.raw_start is not None and anchor.raw_end is not None:
-        start = max(0, anchor.raw_start)
-        end = min(len(content), anchor.raw_end)
-        if start < end:
-            excerpt = content[start:end]
-            if not selected_text or normalize_space(excerpt) == selected_text:
-                return ResolvedRange(start=start, end=end, method="raw-range", selected_text=excerpt)
-    if anchor.note_start is not None and anchor.note_end is not None:
-        start = max(0, anchor.note_start)
-        end = min(len(content), anchor.note_end)
-        if start < end:
-            excerpt = content[start:end]
-            if not selected_text or normalize_space(excerpt) == selected_text:
-                return ResolvedRange(start=start, end=end, method="note-range", selected_text=excerpt)
-    if not selected_text:
-        return None
-    matches = gather_excerpt_matches(content, selected_text)
-    if not matches:
-        return None
-    scoped_sections = locate_section_by_title(sections, locator or anchor.source_item_label)
-    if scoped_sections:
-        scoped = [m for m in matches if any(section.start <= m.start < section.end for section in scoped_sections)]
-        if scoped:
-            matches = scoped
-    best = max(
-        matches,
-        key=lambda m: (
-            score_match(content, m, anchor.prefix_text, anchor.suffix_text),
-            -abs((anchor.raw_start or m.start) - m.start),
-            -(m.end - m.start),
-        ),
-    )
-    return ResolvedRange(start=best.start, end=best.end, method=best.method, selected_text=content[best.start : best.end])
-
-
-def fallback_match_for_card(content: str, sections: list[Section], card: CardLike) -> ResolvedRange | None:
-    anchor = card_attr(card, "coverage_anchor", None)
-    prefix = anchor.prefix_text if isinstance(anchor, CoverageAnchor) else ""
-    suffix = anchor.suffix_text if isinstance(anchor, CoverageAnchor) else ""
-    for candidate in card_search_candidates(card):
-        matches = gather_excerpt_matches(content, candidate)
-        if not matches:
+    seen: set[str] = set()
+    result: list[str] = []
+    for t in [anchor_text, source_excerpt, front, back, extra]:
+        t = normalize_space(t)
+        if not t or len(t) < 3:
             continue
-        scoped_sections = locate_section_by_title(sections, str(card_attr(card, "source_locator", "")))
-        if scoped_sections:
-            scoped = [m for m in matches if any(section.start <= m.start < section.end for section in scoped_sections)]
-            if scoped:
-                matches = scoped
-        best = max(matches, key=lambda m: (score_match(content, m, prefix, suffix), -(m.end - m.start)))
-        return ResolvedRange(start=best.start, end=best.end, method=f"fallback:{best.method}", selected_text=content[best.start : best.end])
-    return None
+        key = t.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(t)
+    return result
 
 
-def resolve_card_range(
+def card_search_candidates(card: CardLike) -> list[str]:
+    """Backward-compat alias for card_texts (used by ai.py)."""
+    return card_texts(card)
+
+
+def unique_preserve_order(values: Iterable[str]) -> list[str]:
+    """Deduplicate strings preserving insertion order (used by ai.py)."""
+    seen: set[str] = set()
+    result: list[str] = []
+    for v in values:
+        v = normalize_space(v)
+        if not v:
+            continue
+        key = v.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(v)
+    return result
+
+
+def card_all_keywords(card: CardLike) -> set[str]:
+    """Merge keywords from all card text fields."""
+    merged: set[str] = set()
+    for t in card_texts(card):
+        merged |= extract_keywords(t)
+    return merged
+
+
+def card_all_bigrams(card: CardLike) -> set[tuple[str, str]]:
+    """Merge bigrams from all card text fields."""
+    merged: set[tuple[str, str]] = set()
+    for t in card_texts(card):
+        merged |= extract_bigrams(t)
+    return merged
+
+
+# ---------------------------------------------------------------------------
+# Sentence matching
+# ---------------------------------------------------------------------------
+
+
+def _anchor_sentence_indices(
+    sentences: list[Sentence], anchor: CoverageAnchor | None, content: str,
+) -> list[int]:
+    """Find sentence indices that overlap the anchor's stored range."""
+    if anchor is None:
+        return []
+    # Try raw_start/raw_end first, then note_start/note_end
+    start = end = None
+    for s_attr, e_attr in [("raw_start", "raw_end"), ("note_start", "note_end")]:
+        s = getattr(anchor, s_attr, None)
+        e = getattr(anchor, e_attr, None)
+        if s is not None and e is not None and s < e:
+            start, end = max(0, s), min(len(content), e)
+            break
+    if start is None or end is None:
+        return []
+    return [i for i, sent in enumerate(sentences)
+            if sent.end > start and sent.start < end and sent.is_content]
+
+
+def _substring_sentence_indices(
+    sentences: list[Sentence], text: str,
+) -> list[int]:
+    """Find sentences whose text contains the given substring (case-insensitive)."""
+    if not text or len(text) < 6:
+        return []
+    text_lower = text.lower()
+    indices: list[int] = []
+    for i, sent in enumerate(sentences):
+        if not sent.is_content:
+            continue
+        if text_lower in sent.text.lower():
+            indices.append(i)
+    return indices
+
+
+def _find_in_content(content: str, excerpt: str) -> list[tuple[int, int]]:
+    """Find all occurrences of excerpt in content (case-insensitive)."""
+    if not excerpt or len(excerpt) < 6:
+        return []
+    content_lower = content.lower()
+    excerpt_lower = excerpt.lower()
+    matches = []
+    start = 0
+    while True:
+        idx = content_lower.find(excerpt_lower, start)
+        if idx == -1:
+            break
+        matches.append((idx, idx + len(excerpt)))
+        start = idx + 1
+    return matches
+
+
+def _excerpt_sentence_indices(
+    sentences: list[Sentence], content: str, excerpt: str,
+) -> list[int]:
+    """Find sentences that overlap with positions where excerpt appears in content."""
+    spans = _find_in_content(content, excerpt)
+    if not spans:
+        return []
+    indices: set[int] = set()
+    for span_start, span_end in spans:
+        for i, sent in enumerate(sentences):
+            if sent.is_content and sent.end > span_start and sent.start < span_end:
+                indices.add(i)
+    return sorted(indices)
+
+
+def _bigram_overlap_score(sent_bigrams: set[tuple[str, str]], card_bigrams: set[tuple[str, str]]) -> float:
+    """Fraction of card bigrams found in the sentence."""
+    if not card_bigrams:
+        return 0.0
+    overlap = len(sent_bigrams & card_bigrams)
+    return overlap / len(card_bigrams)
+
+
+def _keyword_jaccard(sent_kw: set[str], card_kw: set[str]) -> float:
+    """Weighted Jaccard: longer keywords count more."""
+    if not sent_kw or not card_kw:
+        return 0.0
+    overlap = sent_kw & card_kw
+    if not overlap:
+        return 0.0
+    # Weight by word length (longer = more specific = more informative)
+    overlap_weight = sum(len(w) for w in overlap)
+    union_weight = sum(len(w) for w in (sent_kw | card_kw))
+    return overlap_weight / max(1, union_weight)
+
+
+MIN_BIGRAM_CONFIDENCE = 0.25   # ≥25% of card bigrams in sentence
+MIN_KEYWORD_CONFIDENCE = 0.15  # ≥15% weighted Jaccard
+
+
+def match_card_to_sentences(
+    sentences: list[Sentence],
     content: str,
     sections: list[Section],
     card: CardLike,
     *,
-    tokens: list[Token] | None = None,
-    semantic_windows: list[SemanticWindow] | None = None,
-) -> ResolvedRange | None:
-    return (
-        match_from_anchor(content, sections, card_attr(card, "coverage_anchor", None), str(card_attr(card, "source_locator", "")))
-        or fallback_match_for_card(content, sections, card)
-        or semantic_match_from_candidates(
-            content,
-            sections,
-            card,
-            semantic_windows=semantic_windows or build_semantic_windows(content, tokens or iter_tokens(content)),
-        )
-    )
+    sentence_keywords: list[set[str]] | None = None,
+    sentence_bigrams: list[set[tuple[str, str]]] | None = None,
+) -> list[SentenceMapping]:
+    """Map a card to the sentences it covers, using a multi-level strategy.
+
+    Levels (tried in order, first success wins):
+      1. Anchor range → overlapping sentences
+      2. Source excerpt / selected_text found in content → overlapping sentences
+      3. Bigram overlap between card and sentence
+      4. Weighted keyword Jaccard between card and sentence
+    """
+    card_id = str(card_attr(card, "id", ""))
+    anchor = card_attr(card, "coverage_anchor", None)
+    mappings: list[SentenceMapping] = []
+
+    # Level 1: Anchor-based
+    if isinstance(anchor, CoverageAnchor):
+        indices = _anchor_sentence_indices(sentences, anchor, content)
+        if indices:
+            for idx in indices:
+                mappings.append(SentenceMapping(idx, card_id, 1.0, "anchor"))
+            return mappings
+
+    # Level 2: Direct text match (source_excerpt, selected_text, front)
+    texts = card_texts(card)
+    for t in texts:
+        indices = _excerpt_sentence_indices(sentences, content, t)
+        if indices:
+            for idx in indices:
+                mappings.append(SentenceMapping(idx, card_id, 0.9, "text-match"))
+            return mappings
+
+    # Level 3: Bigram overlap
+    c_bigrams = card_all_bigrams(card)
+    if c_bigrams and sentence_bigrams:
+        best_idx = -1
+        best_score = 0.0
+        for i, s_bigrams in enumerate(sentence_bigrams):
+            if not sentences[i].is_content:
+                continue
+            score = _bigram_overlap_score(s_bigrams, c_bigrams)
+            if score > best_score:
+                best_score = score
+                best_idx = i
+        if best_score >= MIN_BIGRAM_CONFIDENCE and best_idx >= 0:
+            mappings.append(SentenceMapping(best_idx, card_id, best_score, "bigram"))
+            return mappings
+
+    # Level 4: Keyword Jaccard
+    c_keywords = card_all_keywords(card)
+    if c_keywords and sentence_keywords:
+        best_idx = -1
+        best_score = 0.0
+        for i, s_kw in enumerate(sentence_keywords):
+            if not sentences[i].is_content:
+                continue
+            score = _keyword_jaccard(s_kw, c_keywords)
+            if score > best_score:
+                best_score = score
+                best_idx = i
+        if best_score >= MIN_KEYWORD_CONFIDENCE and best_idx >= 0:
+            mappings.append(SentenceMapping(best_idx, card_id, best_score, "keyword"))
+            return mappings
+
+    return []
 
 
-def excerpt_for_range(content: str, start: int, end: int, *, limit: int = 180) -> str:
-    text = normalize_space(content[start:end])
-    if len(text) <= limit:
-        return text
-    return text[: limit - 1].rstrip() + "…"
+# ---------------------------------------------------------------------------
+# Coverage HTML (sentence-level highlighting)
+# ---------------------------------------------------------------------------
 
 
-def _build_gap(content: str, tokens: list[Token], sections: list[Section], start_index: int, end_index: int) -> dict:
-    start = tokens[start_index].start
-    end = tokens[end_index].end
-    section = section_for_offset(sections, start)
-    return {
-        "start": start,
-        "end": end,
-        "word_count": end_index - start_index + 1,
-        "section_title": section.title if section else "Full note",
-        "excerpt": excerpt_for_range(content, start, end),
-    }
-
-
-def gaps_from_tokens(content: str, tokens: list[Token], token_cards: list[set[str]], sections: list[Section]) -> list[dict]:
-    gaps: list[dict] = []
-    gap_start_index: int | None = None
-    for index, card_ids in enumerate(token_cards):
-        if card_ids:
-            if gap_start_index is not None:
-                gaps.append(_build_gap(content, tokens, sections, gap_start_index, index - 1))
-                gap_start_index = None
-            continue
-        if gap_start_index is None:
-            gap_start_index = index
-    if gap_start_index is not None and tokens:
-        gaps.append(_build_gap(content, tokens, sections, gap_start_index, len(tokens) - 1))
-    gaps.sort(key=lambda gap: (-gap["word_count"], gap["start"]))
-    return gaps[:12]
-
-
-def coverage_html(content: str, tokens: list[Token], token_cards: list[set[str]]) -> str:
-    if not tokens:
+def coverage_html(content: str, sentences: list[Sentence], sentence_cards: list[set[str]]) -> str:
+    """Render content with sentence-level coverage highlighting."""
+    if not sentences:
         return '<pre class="coverage-text empty">No text available for coverage analysis.</pre>'
+
     parts: list[str] = ['<pre class="coverage-text">']
     cursor = 0
-    for token, card_ids in zip(tokens, token_cards, strict=False):
-        if cursor < token.start:
-            parts.append(html.escape(content[cursor : token.start]))
-        token_text = html.escape(content[token.start : token.end])
-        if card_ids:
-            ids = ",".join(sorted(card_ids))
-            has_anki = any(card_id.startswith("anki:") for card_id in card_ids)
-            has_local = any(not card_id.startswith("anki:") for card_id in card_ids)
+
+    for sent, card_ids in zip(sentences, sentence_cards, strict=False):
+        # Add any gap between cursor and this sentence
+        if cursor < sent.start:
+            parts.append(html.escape(content[cursor:sent.start]))
+
+        sent_html = html.escape(content[sent.start:sent.end])
+
+        if sent.is_heading:
+            parts.append(sent_html)
+        elif card_ids:
+            has_anki = any(cid.startswith("anki:") for cid in card_ids)
+            has_local = any(not cid.startswith("anki:") for cid in card_ids)
             if has_anki and has_local:
-                source_class = " mixed"
+                src_cls = " mixed"
             elif has_anki:
-                source_class = " anki"
+                src_cls = " anki"
             else:
-                source_class = " local"
-            extra_class = " multi" if len(card_ids) > 1 else ""
+                src_cls = " local"
+            multi_cls = " multi" if len(card_ids) > 1 else ""
+            ids = ",".join(sorted(card_ids))
             title = html.escape(f"Covered by {len(card_ids)} card(s)")
             parts.append(
-                f'<span class="coverage-token covered{extra_class}{source_class}" data-card-ids="{ids}" title="{title}">{token_text}</span>'
+                f'<span class="coverage-token covered{multi_cls}{src_cls}" '
+                f'data-card-ids="{ids}" title="{title}">{sent_html}</span>'
             )
         else:
-            parts.append(f'<span class="coverage-token uncovered" title="No linked card">{token_text}</span>')
-        cursor = token.end
+            parts.append(
+                f'<span class="coverage-token uncovered" title="No linked card">{sent_html}</span>'
+            )
+
+        cursor = sent.end
+
     if cursor < len(content):
         parts.append(html.escape(content[cursor:]))
+
     parts.append("</pre>")
     return "".join(parts)
 
 
-def has_alpha_character(text: str) -> bool:
-    return any(character.isalpha() for character in (text or ""))
+# ---------------------------------------------------------------------------
+# Gap detection
+# ---------------------------------------------------------------------------
 
 
-
-def keyword_set(text: str) -> set[str]:
-    tokens = [match.group(0).casefold() for match in WORD_PATTERN.finditer(text)]
+def _build_gap(content: str, sentences: list[Sentence], sections: list[Section],
+               start_idx: int, end_idx: int) -> dict:
+    start = sentences[start_idx].start
+    end = sentences[end_idx].end
+    count = end_idx - start_idx + 1
+    section = section_for_offset(sections, start)
+    text = normalize_space(content[start:end])
+    excerpt = text if len(text) <= 180 else text[:179].rstrip() + "…"
     return {
-        token
-        for token in tokens
-        if len(token) >= 3 and token not in COMMON_TERMS and has_alpha_character(token)
+        "start": start,
+        "end": end,
+        "sentence_count": count,
+        "word_count": len(WORD_PATTERN.findall(content[start:end])),
+        "section_title": section.title if section else "Full note",
+        "excerpt": excerpt,
     }
 
 
-
-def build_semantic_windows(content: str, tokens: list[Token], *, window_size: int = 42, stride: int = 18) -> list[SemanticWindow]:
-    if not tokens:
-        return []
-    windows: list[SemanticWindow] = []
-    last_range: tuple[int, int] | None = None
-    for start_index in range(0, len(tokens), max(1, stride)):
-        end_index = min(len(tokens) - 1, start_index + max(1, window_size) - 1)
-        start = tokens[start_index].start
-        end = tokens[end_index].end
-        current_range = (start, end)
-        if current_range == last_range:
-            continue
-        keywords = keyword_set(content[start:end])
-        if keywords:
-            windows.append(SemanticWindow(start=start, end=end, keywords=keywords))
-            last_range = current_range
-        if end_index >= len(tokens) - 1:
-            break
-    if not windows:
-        windows.append(SemanticWindow(start=0, end=len(content), keywords=keyword_set(content)))
-    return windows
+def find_gaps(content: str, sentences: list[Sentence], sentence_cards: list[set[str]],
+              sections: list[Section]) -> list[dict]:
+    """Find runs of consecutive uncovered content sentences."""
+    content_indices = [i for i, s in enumerate(sentences) if s.is_content]
+    gaps: list[dict] = []
+    run_start: int | None = None
+    for ci in content_indices:
+        if sentence_cards[ci]:
+            if run_start is not None:
+                gaps.append(_build_gap(content, sentences, sections, run_start, prev_ci))
+                run_start = None
+        else:
+            if run_start is None:
+                run_start = ci
+            prev_ci = ci
+    if run_start is not None:
+        gaps.append(_build_gap(content, sentences, sections, run_start, content_indices[-1]))
+    gaps.sort(key=lambda g: (-g["sentence_count"], g["start"]))
+    return gaps[:12]
 
 
-
-def semantic_overlap_score(candidate_terms: set[str], reference_terms: set[str]) -> float:
-    if not candidate_terms or not reference_terms:
-        return 0.0
-    overlap = candidate_terms & reference_terms
-    if not overlap:
-        return 0.0
-    overlap_count = len(overlap)
-    return overlap_count + (overlap_count / max(1, len(candidate_terms))) + (overlap_count / max(1, len(reference_terms)))
+# ---------------------------------------------------------------------------
+# Anki card filtering
+# ---------------------------------------------------------------------------
 
 
+def card_overlaps_note(content: str, note_kw: set[str], card: AnkiLibraryCard) -> bool:
+    """Check whether an Anki library card is likely relevant to this note."""
+    content_lower = content.lower()
+    for candidate in card_texts(card):
+        candidate_lower = candidate.lower()
+        # Strong signal: a long substring match
+        if len(candidate_lower) >= 12 and candidate_lower in content_lower:
+            return True
+        candidate_kw = extract_keywords(candidate)
+        overlap = candidate_kw & note_kw
+        if len(overlap) >= 3:
+            return True
+        jaccard = _keyword_jaccard(candidate_kw, note_kw)
+        if jaccard >= 0.12:
+            return True
+    return False
 
-def semantic_match_from_candidates(
-    content: str,
-    sections: list[Section],
-    card: CardLike,
-    *,
-    semantic_windows: list[SemanticWindow],
-) -> ResolvedRange | None:
-    candidates = card_search_candidates(card)
-    if not candidates:
-        return None
-    merged_terms = keyword_set(" ".join(candidates))
-    if not merged_terms:
-        return None
 
-    scoped_sections = locate_section_by_title(sections, str(card_attr(card, "source_locator", "")))
-    scoped_windows = [
-        window
-        for window in semantic_windows
-        if any(section.start <= window.start < section.end for section in scoped_sections)
-    ] if scoped_sections else semantic_windows
-    if not scoped_windows:
-        scoped_windows = semantic_windows
-
-    best_window: SemanticWindow | None = None
-    best_score = 0.0
-    best_overlap_count = 0
-    for window in scoped_windows:
-        overlap = merged_terms & window.keywords
-        overlap_count = len(overlap)
-        if overlap_count == 0:
-            continue
-        score = semantic_overlap_score(merged_terms, window.keywords)
-        if score > best_score or (score == best_score and overlap_count > best_overlap_count):
-            best_window = window
-            best_score = score
-            best_overlap_count = overlap_count
-
-    if best_window is None:
-        return None
-
-    minimum_overlap = 2 if len(merged_terms) >= 4 else 1
-    if best_overlap_count < minimum_overlap and best_score < 1.8:
-        return None
-
-    return ResolvedRange(
-        start=best_window.start,
-        end=best_window.end,
-        method="semantic-window",
-        selected_text=content[best_window.start : best_window.end],
-    )
-
+# ---------------------------------------------------------------------------
+# Public: best_excerpt_for_candidates  (used by AI module)
+# ---------------------------------------------------------------------------
 
 
 def best_excerpt_for_candidates(content: str, candidates: Iterable[str], *, limit: int = 220) -> str:
-    normalized_candidates = [plain_card_text(candidate) for candidate in candidates if plain_card_text(candidate)]
+    normalized = [plain_card_text(c) for c in candidates if plain_card_text(c)]
     if not content.strip():
         return ""
-    for candidate in normalized_candidates:
-        matches = gather_excerpt_matches(content, candidate)
-        if matches:
-            match = max(matches, key=lambda item: item.end - item.start)
-            return excerpt_for_range(content, match.start, match.end, limit=limit)
-
-    tokens = iter_tokens(content)
-    windows = build_semantic_windows(content, tokens)
-    synthetic_card = AnkiLibraryCard(
-        id="synthetic",
-        note_id=None,
-        model_name="",
-        deck_name="",
-        type="basic",
-        front=normalized_candidates[0] if normalized_candidates else "",
-        back=" ".join(normalized_candidates[1:]),
-    )
-    resolved = semantic_match_from_candidates(content, parse_sections(content), synthetic_card, semantic_windows=windows)
-    if resolved is not None:
-        return excerpt_for_range(content, resolved.start, resolved.end, limit=limit)
-    return excerpt_for_range(content, 0, len(content), limit=limit)
-
-
-
-def card_overlaps_note(content: str, note_terms: set[str], card: AnkiLibraryCard) -> bool:
-    content_folded = content.casefold()
-    best_overlap = 0
-    best_score = 0.0
-    for candidate in card_search_candidates(card):
-        candidate_folded = candidate.casefold()
-        if len(candidate_folded) >= 8 and candidate_folded in content_folded:
-            return True
-        candidate_terms = keyword_set(candidate)
-        overlap = len(candidate_terms & note_terms)
-        best_overlap = max(best_overlap, overlap)
-        best_score = max(best_score, semantic_overlap_score(candidate_terms, note_terms))
-        if overlap >= 3:
-            return True
-        if overlap >= 2 and len(candidate) <= 220:
-            return True
-        if best_score >= 2.0:
-            return True
-    return best_overlap >= 1 and len(note_terms) <= 8
+    for candidate in normalized:
+        spans = _find_in_content(content, candidate)
+        if spans:
+            best = max(spans, key=lambda s: s[1] - s[0])
+            text = normalize_space(content[best[0]:best[1]])
+            return text if len(text) <= limit else text[:limit - 1].rstrip() + "…"
+    # Fallback: keyword overlap to find best region
+    merged_kw = set()
+    for c in normalized:
+        merged_kw |= extract_keywords(c)
+    if merged_kw:
+        sentences = split_sentences(content)
+        best_sent = None
+        best_score = 0.0
+        for sent in sentences:
+            if not sent.is_content:
+                continue
+            score = _keyword_jaccard(extract_keywords(sent.text), merged_kw)
+            if score > best_score:
+                best_score = score
+                best_sent = sent
+        if best_sent:
+            text = normalize_space(best_sent.text)
+            return text if len(text) <= limit else text[:limit - 1].rstrip() + "…"
+    text = normalize_space(content)
+    return text if len(text) <= limit else text[:limit - 1].rstrip() + "…"
 
 
-def apply_resolved_range(token_cards: list[set[str]], tokens: list[Token], card_id: str, resolved: ResolvedRange) -> int:
-    covered_word_count = 0
-    for index, token in enumerate(tokens):
-        if token.end <= resolved.start:
-            continue
-        if token.start >= resolved.end:
-            break
-        if token.start < resolved.end and token.end > resolved.start:
-            if card_id not in token_cards[index]:
-                token_cards[index].add(card_id)
-                covered_word_count += 1
-    return covered_word_count
+# ---------------------------------------------------------------------------
+# Build card result (unchanged shape for API compat)
+# ---------------------------------------------------------------------------
 
 
-def build_card_result(card: CardLike, *, mapped: bool, resolved: ResolvedRange | None = None, covered_word_count: int = 0, section_title: str | None = None) -> dict[str, Any]:
+def _excerpt(text: str, limit: int = 120) -> str:
+    text = normalize_space(text)
+    return text if len(text) <= limit else text[:limit - 1].rstrip() + "…"
+
+
+def build_card_result(
+    card: CardLike, *, mapped: bool,
+    matched_sentences: list[SentenceMapping] | None = None,
+    content: str = "",
+    sections: list[Section] | None = None,
+) -> dict[str, Any]:
     front_text = plain_card_text(str(card_attr(card, "front", "")))
     locator = str(card_attr(card, "source_locator", ""))
     source_excerpt = plain_card_text(str(card_attr(card, "source_excerpt", "")))
+
+    method = matched_sentences[0].method if matched_sentences else None
+    section_title = None
+    range_start = range_end = None
+
+    if matched_sentences and sections and content:
+        first = matched_sentences[0]
+        sec = section_for_offset(sections, 0)
+        # Find the actual section from the sentence start offset
+        for s in sections:
+            # Use a rough mapping from sentence_index → content offset
+            pass
+        section_title = None
+
+    selected = source_excerpt or front_text
+
+    if matched_sentences and content:
+        # Use the matched sentence text as selected_text
+        # Gather all sentence indices and find their text
+        indices = [m.sentence_index for m in matched_sentences]
+        sentences = split_sentences(content)
+        if sentences and indices:
+            first_sent = sentences[indices[0]] if indices[0] < len(sentences) else None
+            last_sent = sentences[indices[-1]] if indices[-1] < len(sentences) else None
+            if first_sent and last_sent:
+                range_start = first_sent.start
+                range_end = last_sent.end
+                selected = normalize_space(content[range_start:range_end])
+                section_title_sec = section_for_offset(sections, first_sent.start) if sections else None
+                section_title = section_title_sec.title if section_title_sec else None
+
     payload: dict[str, Any] = {
         "id": str(card_attr(card, "id", "")),
         "type": str(card_attr(card, "type", "basic")),
         "origin": card_origin(card),
-        "front": excerpt_for_range(front_text, 0, len(front_text), limit=80),
+        "front": _excerpt(front_text, limit=80),
         "deck_name": str(card_attr(card, "deck_name", "Default")),
         "mapped": mapped,
-        "method": resolved.method if resolved else None,
-        "selected_text": excerpt_for_range(
-            resolved.selected_text if resolved else (source_excerpt or front_text),
-            0,
-            len(resolved.selected_text if resolved else (source_excerpt or front_text)),
-            limit=120,
-        ),
+        "method": method,
+        "selected_text": _excerpt(selected),
         "source_locator": locator,
         "section_title": section_title,
-        "covered_words": covered_word_count,
+        "covered_words": len(matched_sentences) if matched_sentences else 0,
     }
-    if resolved:
-        payload["range_start"] = resolved.start
-        payload["range_end"] = resolved.end
+    if range_start is not None:
+        payload["range_start"] = range_start
+        payload["range_end"] = range_end
+
     note_id = card_attr(card, "note_id", None)
     if note_id is not None:
         payload["anki_note_id"] = note_id
@@ -616,6 +756,11 @@ def build_card_result(card: CardLike, *, mapped: bool, resolved: ResolvedRange |
     if model_name:
         payload["model_name"] = str(model_name)
     return payload
+
+
+# ---------------------------------------------------------------------------
+# Main entry point
+# ---------------------------------------------------------------------------
 
 
 def build_note_coverage(
@@ -626,107 +771,121 @@ def build_note_coverage(
 ) -> dict:
     content = note.content or ""
     sections = parse_sections(content)
-    tokens = iter_tokens(content)
-    semantic_windows = build_semantic_windows(content, tokens)
-    token_cards = [set() for _ in tokens]
-    card_results: list[dict[str, Any]] = []
+    sentences = split_sentences(content)
+    content_sentences = [s for s in sentences if s.is_content]
+
+    # Pre-compute keywords and bigrams for each sentence
+    sentence_keywords = [extract_keywords(s.text) if s.is_content else set() for s in sentences]
+    sentence_bigrams = [extract_bigrams(s.text) if s.is_content else set() for s in sentences]
+
+    # Per-sentence card sets
+    sentence_cards: list[set[str]] = [set() for _ in sentences]
+
     local_cards = list(note.cards)
     external_cards = list(external_cards or [])
-    note_terms = keyword_set(plain_card_text(content))
-    external_candidates = [card for card in external_cards if card_overlaps_note(content, note_terms, card)]
+    note_kw = extract_keywords(plain_card_text(content))
+    external_candidates = [c for c in external_cards if card_overlaps_note(content, note_kw, c)]
 
+    card_results: list[dict[str, Any]] = []
+
+    # Map local cards
     for card in local_cards:
-        resolved = resolve_card_range(content, sections, card, tokens=tokens, semantic_windows=semantic_windows)
-        if resolved is None:
+        mappings = match_card_to_sentences(
+            sentences, content, sections, card,
+            sentence_keywords=sentence_keywords,
+            sentence_bigrams=sentence_bigrams,
+        )
+        if not mappings:
             card_results.append(build_card_result(card, mapped=False))
             continue
-        covered_word_count = apply_resolved_range(token_cards, tokens, str(card.id), resolved)
-        section = section_for_offset(sections, resolved.start)
-        card_results.append(
-            build_card_result(
-                card,
-                mapped=True,
-                resolved=resolved,
-                covered_word_count=covered_word_count,
-                section_title=section.title if section else None,
-            )
-        )
+        for m in mappings:
+            sentence_cards[m.sentence_index].add(str(card.id))
+        card_results.append(build_card_result(
+            card, mapped=True, matched_sentences=mappings,
+            content=content, sections=sections,
+        ))
 
-    matched_external_cards: list[dict[str, Any]] = []
+    # Map external (Anki) cards
+    matched_external: list[dict[str, Any]] = []
     for card in external_candidates:
-        resolved = resolve_card_range(content, sections, card, tokens=tokens, semantic_windows=semantic_windows)
-        if resolved is None:
-            continue
-        covered_word_count = apply_resolved_range(token_cards, tokens, str(card.id), resolved)
-        section = section_for_offset(sections, resolved.start)
-        matched_external_cards.append(
-            build_card_result(
-                card,
-                mapped=True,
-                resolved=resolved,
-                covered_word_count=covered_word_count,
-                section_title=section.title if section else None,
-            )
+        mappings = match_card_to_sentences(
+            sentences, content, sections, card,
+            sentence_keywords=sentence_keywords,
+            sentence_bigrams=sentence_bigrams,
         )
+        if not mappings:
+            continue
+        for m in mappings:
+            sentence_cards[m.sentence_index].add(f"anki:{card.id}")
+        matched_external.append(build_card_result(
+            card, mapped=True, matched_sentences=mappings,
+            content=content, sections=sections,
+        ))
 
-    card_results.extend(matched_external_cards)
-    covered_words = sum(1 for card_ids in token_cards if card_ids)
-    total_words = len(tokens)
-    coverage_percent = round((covered_words / total_words) * 100, 1) if total_words else 0.0
+    card_results.extend(matched_external)
 
+    # Compute stats
+    total_content = len(content_sentences)
+    covered_content = sum(1 for i, s in enumerate(sentences) if s.is_content and sentence_cards[i])
+    coverage_pct = round((covered_content / total_content) * 100, 1) if total_content else 0.0
+
+    # Section stats
     section_payloads: list[dict] = []
     uncovered_section_count = 0
-    for section in sections:
-        section_indexes = [i for i, token in enumerate(tokens) if token.start < section.end and token.end > section.start]
-        total_section_words = len(section_indexes)
-        covered_section_words = sum(1 for i in section_indexes if token_cards[i])
-        section_percent = round((covered_section_words / total_section_words) * 100, 1) if total_section_words else 0.0
-        section_card_ids = sorted({card_id for i in section_indexes for card_id in token_cards[i]})
-        if section_percent < 100:
+    for sec in sections:
+        sec_indices = [i for i, s in enumerate(sentences)
+                       if s.is_content and s.start < sec.end and s.end > sec.start]
+        total_sec = len(sec_indices)
+        covered_sec = sum(1 for i in sec_indices if sentence_cards[i])
+        sec_pct = round((covered_sec / total_sec) * 100, 1) if total_sec else 0.0
+        sec_card_ids = sorted({cid for i in sec_indices for cid in sentence_cards[i]})
+        if sec_pct < 100:
             uncovered_section_count += 1
-        section_payloads.append(
-            {
-                "title": section.title,
-                "level": section.level,
-                "start": section.start,
-                "end": section.end,
-                "total_words": total_section_words,
-                "covered_words": covered_section_words,
-                "coverage_percent": section_percent,
-                "card_ids": section_card_ids,
-            }
-        )
+        section_payloads.append({
+            "title": sec.title,
+            "level": sec.level,
+            "start": sec.start,
+            "end": sec.end,
+            "total_words": total_sec,       # re-using field name for compat
+            "covered_words": covered_sec,    # re-using field name for compat
+            "coverage_percent": sec_pct,
+            "card_ids": sec_card_ids,
+        })
 
-    gaps = gaps_from_tokens(content, tokens, token_cards, sections)
-    local_mapped_cards = sum(1 for item in card_results if item["origin"] == "local" and item["mapped"])
-    local_unmapped_cards = len(local_cards) - local_mapped_cards
-    anki_matched_cards = len(matched_external_cards)
-    payload_anki_status = {
+    # Gaps
+    gaps = find_gaps(content, sentences, sentence_cards, sections)
+
+    local_mapped = sum(1 for r in card_results if r["origin"] == "local" and r["mapped"])
+    local_unmapped = len(local_cards) - local_mapped
+    anki_matched = len(matched_external)
+
+    payload_anki = {
         "available": bool(anki_status.get("available", False)) if anki_status else False,
         "error": anki_status.get("error") if anki_status else None,
         "total_cards": len(external_cards),
         "considered_cards": len(external_candidates),
-        "matched_cards": anki_matched_cards,
+        "matched_cards": anki_matched,
     }
 
     return {
         "stats": {
-            "covered_words": covered_words,
-            "total_words": total_words,
-            "coverage_percent": coverage_percent,
+            "covered_words": covered_content,   # field name kept for compat
+            "total_words": total_content,        # field name kept for compat
+            "coverage_percent": coverage_pct,
             "total_cards": len(local_cards),
-            "mapped_cards": local_mapped_cards + anki_matched_cards,
-            "unmapped_cards": local_unmapped_cards,
-            "local_mapped_cards": local_mapped_cards,
+            "mapped_cards": local_mapped + anki_matched,
+            "unmapped_cards": local_unmapped,
+            "local_mapped_cards": local_mapped,
             "anki_total_cards": len(external_cards),
             "anki_considered_cards": len(external_candidates),
-            "anki_matched_cards": anki_matched_cards,
-            "coverage_card_count": local_mapped_cards + anki_matched_cards,
+            "anki_matched_cards": anki_matched,
+            "coverage_card_count": local_mapped + anki_matched,
             "uncovered_sections": uncovered_section_count,
+            "unit": "sentences",  # signal to frontend
         },
         "cards": card_results,
         "sections": section_payloads,
         "gaps": gaps,
-        "coverage_html": coverage_html(content, tokens, token_cards),
-        "anki": payload_anki_status,
+        "coverage_html": coverage_html(content, sentences, sentence_cards),
+        "anki": payload_anki,
     }

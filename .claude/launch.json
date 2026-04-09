@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Nanki Dev Server",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "noteforge_anki_studio"],
+      "port": 7788
+    }
+  ]
+}
