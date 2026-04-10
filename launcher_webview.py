@@ -48,6 +48,11 @@ if sys.stdout is None:
 if sys.stderr is None:
     sys.stderr = io.StringIO()
 
+# Import app for server
+if getattr(sys, "frozen", False):
+    sys.path.insert(0, sys._MEIPASS)
+from noteforge_anki_studio.app import app
+
 
 def _is_port_listening(host: str, port: int) -> bool:
     """Check if something is LISTENING on the port.
@@ -143,8 +148,6 @@ def main() -> int:
         logger.info(f"Platform: {sys.platform}")
         logger.info(f"Python: {sys.version}")
 
-        # Import after logging is set up
-        from noteforge_anki_studio.app import app
         from noteforge_anki_studio.config import SettingsManager
 
         settings_manager = SettingsManager()
@@ -200,7 +203,6 @@ def main() -> int:
         window = webview.create_window(
             title="Nanki — Study Workspace",
             url=url,
-            icon_path=icon_path,
             width=1400,
             height=900,
             min_size=(900, 600),
