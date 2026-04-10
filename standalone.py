@@ -1,8 +1,7 @@
 """
-Nanki Standalone - Desktop App ohne lokalen Server
+Nanki Standalone - Full-featured desktop app without local HTTP server.
 
-Diese Version nutzt PyWebView's JavaScript Bridge für direkte Kommunikation
-zwischen Frontend und Python-Backend ohne HTTP-Server.
+Uses PyWebView's JavaScript Bridge for direct frontend-backend communication.
 """
 
 from __future__ import annotations
@@ -22,326 +21,316 @@ logging.basicConfig(
 )
 logger = logging.getLogger("Nanki")
 
-# Data directory
-if sys.platform == "win32":
-    DATA_DIR = Path.home() / "AppData" / "Roaming" / "Nanki"
-elif sys.platform == "darwin":
-    DATA_DIR = Path.home() / "Library" / "Application Support" / "Nanki"
-else:
-    DATA_DIR = Path.home() / ".local" / "share" / "nanki"
-
-DATA_DIR.mkdir(parents=True, exist_ok=True)
-NOTES_DIR = DATA_DIR / "notes"
-NOTES_DIR.mkdir(exist_ok=True)
+# Import all services from main app
+try:
+    from noteforge_anki_studio.ai import AIService, AIConfigurationError, AIServiceError
+    from noteforge_anki_studio.anki_connect import AnkiConnectClient, AnkiConnectError
+    from noteforge_anki_studio.config import SettingsManager
+    from noteforge_anki_studio.coverage import build_note_coverage
+    from noteforge_anki_studio.exporters import CardExporter
+    from noteforge_anki_studio.importers import ImportService, UnsupportedImportError
+    from noteforge_anki_studio.models import (
+        AIChatRequest,
+        AIExplainRequest,
+        AIGenerateCardsRequest,
+        AISuggestCardsForGapsRequest,
+        AnkiPushRequest,
+        Card,
+        AppSettings,
+    )
+    from noteforge_anki_studio.storage import WorkspaceStore
+    SERVICES_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"Could not import services: {e}")
+    SERVICES_AVAILABLE = False
 
 
 class NankiAPI:
-    """Python API exposed to JavaScript via PyWebView bridge."""
+    """Full API exposed to JavaScript via PyWebView bridge."""
+
+    def __init__(self):
+        if not SERVICES_AVAILABLE:
+            raise RuntimeError("Required services not available")
+        
+        self.settings_manager = SettingsManager()
+        self.store = WorkspaceStore(self.settings_manager)
+        self.import_service = ImportService()
+        self.exporter = CardExporter()
+        self.anki_client = AnkiConnectClient(self.settings_manager)
+        self.ai_service = AIService(self.settings_manager, self.anki_client)
+
+    # ==================== Settings ====================
+
+    def get_settings(self) -> dict[str, Any]:
+        """Get application settings."""
+        settings = self.settings_manager.load()
+        return settings.model_dump()
+
+    def update_settings(self, settings: dict) -> dict[str, Any]:
+        """Update application settings."""
+        settings_obj = AppSettings.model_validate(settings)
+        return self.settings_manager.save(settings_obj).model_dump()
+
+    def update_workspace(self, workspace_path: str) -> dict[str, Any]:
+        """Update workspace path."""
+        settings = self.settings_manager.load()
+        settings.workspace_path = workspace_path
+        return self.settings_manager.save(settings).model_dump()
 
     # ==================== Notes ====================
 
-    def get_notes(self) -> list[dict[str, Any]]:
-        """Get all notes."""
-        notes = []
-        for note_dir in NOTES_DIR.iterdir():
-            if note_dir.is_dir():
-                note_file = note_dir / "note.md"
-                if note_file.exists():
-                    notes.append({
-                        "id": note_dir.name,
-                        "title": note_file.read_text(encoding="utf-8").split("\n")[0].lstrip("# "),
-                        "path": str(note_dir),
-                    })
-        return notes
+    def list_notes(self) -> list[dict[str, Any]]:
+        """List all notes."""
+        notes = self.store.list_notes()
+        notes.sort(key=lambda item: (not item.meta.pinned, item.meta.updated_at), reverse=True)
+        return [item.model_dump() for item in notes]
 
     def get_note(self, note_id: str) -> dict[str, Any] | None:
-        """Get a single note."""
-        note_dir = NOTES_DIR / note_id
-        if not note_dir.exists():
-            return None
-        
-        note_file = note_dir / "note.md"
-        cards_file = note_dir / "cards.json"
-        
-        content = note_file.read_text(encoding="utf-8") if note_file.exists() else ""
-        cards = json.loads(cards_file.read_text(encoding="utf-8")) if cards_file.exists() else []
-        
-        return {
-            "id": note_id,
-            "content": content,
-            "cards": cards,
-        }
+        """Get a single note by ID."""
+        note = self.store.get_note(note_id)
+        return note.model_dump() if note else None
 
-    def save_note(self, note_id: str, content: str, cards: list[dict]) -> bool:
-        """Save a note."""
-        note_dir = NOTES_DIR / note_id
-        note_dir.mkdir(exist_ok=True)
-        
-        (note_dir / "note.md").write_text(content, encoding="utf-8")
-        (note_dir / "cards.json").write_text(json.dumps(cards, indent=2), encoding="utf-8")
-        return True
-
-    def create_note(self, title: str = "Untitled") -> dict[str, Any]:
+    def create_note(self, title: str = "Untitled", content: str = None, tags: list[str] = None, default_deck: str = None) -> dict[str, Any]:
         """Create a new note."""
-        import uuid
-        note_id = str(uuid.uuid4())[:8]
-        note_dir = NOTES_DIR / note_id
-        note_dir.mkdir(exist_ok=True)
-        
-        content = f"# {title}\n\n"
-        (note_dir / "note.md").write_text(content, encoding="utf-8")
-        (note_dir / "cards.json").write_text("[]", encoding="utf-8")
-        
-        return {"id": note_id, "title": title}
+        if content is None:
+            content = f"# {title}\n\n"
+        note = self.store.create_note(
+            title=title,
+            content=content,
+            tags=tags or [],
+            default_deck=default_deck,
+        )
+        return note.model_dump()
+
+    def save_note(self, note_id: str, content: str, cards: list[dict] = None) -> dict[str, Any]:
+        """Save note content and cards."""
+        cards_objs = [Card.model_validate(c) for c in (cards or [])]
+        note = self.store.save_note(note_id, content, cards_objs)
+        return note.model_dump()
 
     def delete_note(self, note_id: str) -> bool:
         """Delete a note."""
-        import shutil
-        note_dir = NOTES_DIR / note_id
-        if note_dir.exists():
-            shutil.rmtree(note_dir)
-            return True
-        return False
+        return self.store.delete_note(note_id)
+
+    def duplicate_note(self, note_id: str) -> dict[str, Any]:
+        """Duplicate a note."""
+        note = self.store.duplicate_note(note_id)
+        return note.model_dump()
+
+    def pin_note(self, note_id: str, pinned: bool) -> dict[str, Any]:
+        """Pin or unpin a note."""
+        note = self.store.pin_note(note_id, pinned)
+        return note.model_dump()
+
+    # ==================== Cards ====================
+
+    def save_card(self, note_id: str, card_id: str, card_data: dict) -> dict[str, Any]:
+        """Save a card."""
+        card = Card.model_validate(card_data)
+        updated_card = self.store.save_card(note_id, card_id, card)
+        return updated_card.model_dump()
+
+    def delete_card(self, note_id: str, card_id: str) -> bool:
+        """Delete a card."""
+        return self.store.delete_card(note_id, card_id)
+
+    # ==================== Coverage ====================
+
+    def get_coverage(self, note_id: str) -> dict[str, Any]:
+        """Get coverage analysis for a note."""
+        note = self.store.get_note(note_id)
+        if not note:
+            return {"error": "Note not found"}
+        
+        anki_cards = []
+        try:
+            if self.anki_client.is_connected():
+                anki_cards = self.anki_client.get_all_library_cards()
+        except AnkiConnectError:
+            pass
+        
+        coverage = build_note_coverage(note, anki_cards)
+        return coverage.model_dump()
 
     # ==================== Anki ====================
 
     def get_anki_decks(self) -> list[str]:
-        """Get available Anki decks (placeholder)."""
-        # This would connect to AnkiConnect
-        # For now, return empty list
-        return []
+        """Get available Anki decks."""
+        try:
+            return self.anki_client.get_deck_names()
+        except AnkiConnectError as e:
+            return {"error": str(e)}
 
-    def push_to_anki(self, note_id: str, cards: list[dict]) -> dict[str, Any]:
-        """Push cards to Anki (placeholder)."""
-        # This would use AnkiConnect
-        return {"success": True, "pushed": len(cards)}
+    def push_to_anki(self, note_id: str, cards: list[dict], deck_name: str = None) -> dict[str, Any]:
+        """Push cards to Anki."""
+        try:
+            request = AnkiPushRequest(
+                note_id=note_id,
+                cards=[Card.model_validate(c) for c in cards],
+                deck_name=deck_name,
+            )
+            result = self.anki_client.push_cards(request)
+            return result.model_dump()
+        except AnkiConnectError as e:
+            return {"error": str(e)}
+
+    def test_anki_connection(self) -> dict[str, Any]:
+        """Test AnkiConnect connection."""
+        try:
+            connected = self.anki_client.is_connected()
+            return {"connected": connected}
+        except Exception as e:
+            return {"connected": False, "error": str(e)}
 
     # ==================== AI ====================
 
-    def generate_cards(self, text: str, card_type: str = "basic") -> list[dict]:
-        """Generate flashcards from text (placeholder)."""
-        # This would use Ollama/OpenRouter
-        # For now, return simple cards
-        sentences = [s.strip() for s in text.split(".") if s.strip()][:3]
-        cards = []
-        for i, sentence in enumerate(sentences):
-            if len(sentence) > 20:
-                cards.append({
-                    "id": f"auto-{i}",
-                    "type": card_type,
-                    "front": sentence[:50] + "...?",
-                    "back": sentence,
-                })
-        return cards
+    def ai_generate_cards(self, note_id: str, count: int = 5, card_type: str = "basic") -> dict[str, Any]:
+        """Generate cards using AI."""
+        note = self.store.get_note(note_id)
+        if not note:
+            return {"error": "Note not found"}
+        
+        try:
+            request = AIGenerateCardsRequest(
+                note_id=note_id,
+                count=count,
+                card_type=card_type,
+            )
+            cards = self.ai_service.generate_cards(request)
+            return {"cards": [c.model_dump() for c in cards]}
+        except (AIServiceError, AIConfigurationError) as e:
+            return {"error": str(e)}
 
-    # ==================== File Operations ====================
+    def ai_explain(self, note_id: str, selection: str) -> dict[str, Any]:
+        """Explain text using AI."""
+        try:
+            request = AIExplainRequest(note_id=note_id, selection=selection)
+            result = self.ai_service.explain(request)
+            return result.model_dump()
+        except (AIServiceError, AIConfigurationError) as e:
+            return {"error": str(e)}
+
+    def ai_chat(self, note_id: str, message: str, history: list = None) -> dict[str, Any]:
+        """Chat with AI about note content."""
+        try:
+            request = AIChatRequest(note_id=note_id, message=message, history=history or [])
+            result = self.ai_service.chat(request)
+            return result.model_dump()
+        except (AIServiceError, AIConfigurationError) as e:
+            return {"error": str(e)}
+
+    def ai_suggest_for_gaps(self, note_id: str) -> dict[str, Any]:
+        """Suggest cards for gaps in coverage."""
+        try:
+            request = AISuggestCardsForGapsRequest(note_id=note_id)
+            cards = self.ai_service.suggest_cards_for_gaps(request)
+            return {"cards": [c.model_dump() for c in cards]}
+        except (AIServiceError, AIConfigurationError) as e:
+            return {"error": str(e)}
+
+    # ==================== Import ====================
 
     def import_file(self, file_path: str) -> dict[str, Any]:
-        """Import a file (placeholder)."""
-        path = Path(file_path)
-        if not path.exists():
-            return {"error": "File not found"}
-        
+        """Import a file."""
+        try:
+            # For webview, we need to handle file selection differently
+            # This is a placeholder - actual file handling is in import_file_dialog
+            path = Path(file_path)
+            if not path.exists():
+                return {"error": "File not found"}
+            title, content, manifest, data = self.import_service.import_upload_path(path)
+            return {
+                "title": title,
+                "content": content,
+                "manifest": manifest,
+                "data": data,
+            }
+        except UnsupportedImportError as e:
+            return {"error": str(e)}
+
+    def import_text(self, title: str, text: str) -> dict[str, Any]:
+        """Import plain text."""
+        title, content, manifest, data = self.import_service.import_text_payload(title, text)
         return {
-            "filename": path.name,
-            "content": path.read_text(encoding="utf-8")[:1000],
+            "title": title,
+            "content": content,
+            "manifest": manifest,
+            "data": data,
         }
 
-    def export_cards(self, note_id: str, format: str = "apkg") -> str:
-        """Export cards (placeholder)."""
-        return str(NOTES_DIR / note_id / f"export.{format}")
+    def import_file_dialog(self) -> dict[str, Any] | None:
+        """Open file dialog and import."""
+        result = webview.windows[0].create_file_dialog(
+            webview.OPEN_DIALOG,
+            file_types=("PDF Files (*.pdf)", "PowerPoint Files (*.pptx)", "Markdown Files (*.md)", "Text Files (*.txt)"),
+        )
+        if result and len(result) > 0:
+            return self.import_file(result[0])
+        return None
+
+    # ==================== Export ====================
+
+    def export_apkg(self, note_id: str, cards: list[dict], deck_name: str) -> str:
+        """Export cards as Anki .apkg file."""
+        cards_objs = [Card.model_validate(c) for c in cards]
+        path = self.exporter.export_apkg(cards_objs, deck_name)
+        return str(path)
+
+    def export_csv(self, note_id: str, cards: list[dict]) -> str:
+        """Export cards as CSV."""
+        cards_objs = [Card.model_validate(c) for c in cards]
+        path = self.exporter.export_csv(cards_objs)
+        return str(path)
+
+    # ==================== Utility ====================
+
+    def open_external(self, url: str) -> None:
+        """Open URL in external browser."""
+        import webbrowser
+        webbrowser.open(url)
+
+    def get_version(self) -> str:
+        """Get application version."""
+        return "0.5.0-standalone"
 
 
 def get_html() -> str:
-    """Return the HTML for the standalone app."""
+    """Load the main HTML template."""
+    # In frozen mode, load from bundled assets
+    if getattr(sys, "frozen", False):
+        base_path = Path(sys._MEIPASS)
+        static_path = base_path / "static"
+    else:
+        # In development, load from source
+        base_path = Path(__file__).parent / "src" / "noteforge_anki_studio"
+        static_path = base_path / "static"
+    
+    # Load the template
+    template_path = base_path / "templates" / "index.html"
+    if template_path.exists():
+        return template_path.read_text(encoding="utf-8")
+    
+    # Fallback to minimal template
     return """<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Nanki Standalone</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #0f0f0f;
-            color: #ffffff;
-            padding: 20px;
-        }
-        .container { max-width: 1200px; margin: 0 auto; }
-        h1 { margin-bottom: 20px; color: #a78bfa; }
-        .sidebar {
-            width: 250px;
-            background: #1a1a1a;
-            padding: 15px;
-            border-radius: 8px;
-            margin-right: 20px;
-        }
-        .note-list { list-style: none; }
-        .note-list li {
-            padding: 10px;
-            cursor: pointer;
-            border-radius: 4px;
-            margin-bottom: 5px;
-        }
-        .note-list li:hover { background: #2a2a2a; }
-        .note-list li.active { background: #3b82f6; }
-        .editor {
-            flex: 1;
-            background: #1a1a1a;
-            padding: 20px;
-            border-radius: 8px;
-        }
-        textarea {
-            width: 100%;
-            height: 300px;
-            background: #0f0f0f;
-            color: #fff;
-            border: 1px solid #333;
-            border-radius: 4px;
-            padding: 10px;
-            font-family: 'Monaco', 'Menlo', monospace;
-            font-size: 14px;
-        }
-        .toolbar {
-            margin-bottom: 15px;
-            display: flex;
-            gap: 10px;
-        }
-        button {
-            background: #3b82f6;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-        }
-        button:hover { background: #2563eb; }
-        button.secondary { background: #4b5563; }
-        button.secondary:hover { background: #6b7280; }
-        .cards {
-            margin-top: 20px;
-            padding: 15px;
-            background: #1a1a1a;
-            border-radius: 8px;
-        }
-        .card {
-            background: #0f0f0f;
-            padding: 10px;
-            margin-bottom: 10px;
-            border-radius: 4px;
-            border-left: 3px solid #a78bfa;
-        }
-        .status {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background: #1a1a1a;
-            padding: 10px 20px;
-            border-radius: 4px;
-            font-size: 12px;
-            color: #6b7280;
-        }
-        .main { display: flex; }
-    </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Nanki Standalone</h1>
-        <div class="main">
-            <div class="sidebar">
-                <div class="toolbar">
-                    <button onclick="createNote()">+ New Note</button>
-                </div>
-                <ul class="note-list" id="noteList"></ul>
-            </div>
-            <div class="editor">
-                <div class="toolbar">
-                    <button onclick="saveNote()">Save</button>
-                    <button onclick="generateCards()" class="secondary">Generate Cards</button>
-                </div>
-                <input type="hidden" id="currentNoteId" value="">
-                <h2 id="noteTitle" contenteditable="true">Select or create a note</h2>
-                <textarea id="editor" placeholder="Write your note here..."></textarea>
-                <div class="cards" id="cardsContainer">
-                    <h3>Cards</h3>
-                    <div id="cardsList"></div>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="status" id="status">Ready</div>
-
+    <div id="app"></div>
     <script>
-        let notes = [];
-
-        async function loadNotes() {
-            notes = await pywebview.api.get_notes();
-            renderNoteList();
-        }
-
-        function renderNoteList() {
-            const list = document.getElementById('noteList');
-            list.innerHTML = notes.map(n => 
-                '<li onclick="loadNote(\\'' + n.id + '\\')">' + n.title + '</li>'
-            ).join('');
-        }
-
-        async function createNote() {
-            const result = await pywebview.api.create_note('New Note');
-            notes.push(result);
-            renderNoteList();
-            loadNote(result.id);
-            setStatus('Note created');
-        }
-
-        async function loadNote(noteId) {
-            const note = await pywebview.api.get_note(noteId);
-            if (note) {
-                document.getElementById('currentNoteId').value = noteId;
-                document.getElementById('editor').value = note.content;
-                document.getElementById('noteTitle').textContent = 
-                    note.content.split('\\n')[0].replace(/^#+\\s*/, '') || 'Untitled';
-                renderCards(note.cards);
-                setStatus('Note loaded');
+        // Check for pywebview API
+        function waitForAPI() {
+            if (window.pywebview && window.pywebview.api) {
+                window.pywebviewReady = true;
+                window.dispatchEvent(new Event('pywebviewready'));
+            } else {
+                setTimeout(waitForAPI, 100);
             }
         }
-
-        async function saveNote() {
-            const noteId = document.getElementById('currentNoteId').value;
-            if (!noteId) {
-                alert('No note selected');
-                return;
-            }
-            const content = document.getElementById('editor').value;
-            // Get cards from somewhere
-            const cards = [];
-            await pywebview.api.save_note(noteId, content, cards);
-            setStatus('Note saved');
-        }
-
-        async function generateCards() {
-            const content = document.getElementById('editor').value;
-            const cards = await pywebview.api.generate_cards(content, 'basic');
-            renderCards(cards);
-            setStatus('Generated ' + cards.length + ' cards');
-        }
-
-        function renderCards(cards) {
-            const list = document.getElementById('cardsList');
-            list.innerHTML = cards.map(c => 
-                '<div class="card"><strong>' + c.front + '</strong><br>' + 
-                (c.back || '') + '</div>'
-            ).join('');
-        }
-
-        function setStatus(message) {
-            document.getElementById('status').textContent = message;
-        }
-
-        // Initialize
-        window.addEventListener('pywebviewready', loadNotes);
+        waitForAPI();
     </script>
 </body>
 </html>"""
@@ -356,16 +345,25 @@ def main() -> int:
         api = NankiAPI()
         
         # Determine icon path
-        icon_path = None
         if getattr(sys, "frozen", False):
             if sys.platform == "win32":
                 icon_path = Path(sys._MEIPASS) / "assets" / "nanki-icon.ico"
             elif sys.platform == "darwin":
                 icon_path = Path(sys._MEIPASS) / "assets" / "nanki-icon.icns"
+            else:
+                icon_path = None
+        else:
+            base_path = Path(__file__).parent
+            if sys.platform == "win32":
+                icon_path = base_path / "assets" / "nanki-icon.ico"
+            elif sys.platform == "darwin":
+                icon_path = base_path / "assets" / "nanki-icon.icns"
+            else:
+                icon_path = None
         
         # Create window
         window = webview.create_window(
-            title="Nanki Standalone",
+            title="Nanki — Study Workspace",
             html=get_html(),
             js_api=api,
             icon_path=icon_path,
@@ -374,6 +372,7 @@ def main() -> int:
             min_size=(900, 600),
             resizable=True,
             text_select=True,
+            background_color="#0f0f0f",
         )
         
         # Start webview

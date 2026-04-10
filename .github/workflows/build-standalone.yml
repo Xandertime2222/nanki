@@ -1,0 +1,192 @@
+name: Build Standalone Apps
+
+on:
+  push:
+    branches:
+      - standalone-no-server
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  PYTHON_VERSION: '3.12'
+  APP_NAME: Nanki-Standalone
+  APP_VERSION: '0.5.0'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pyinstaller pyinstaller-hooks-contrib pywebview
+
+      - name: Generate icons
+        shell: pwsh
+        run: |
+          python assets/generate-icons.py
+          Write-Host "Icon files created:"
+          Get-ChildItem assets/icon-*.png, assets/nanki-icon.* | Select-Object Name, Length
+
+      - name: Validate Windows icon
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "assets/nanki-icon.ico")) {
+            Write-Error "Missing Windows icon: assets/nanki-icon.ico"
+            exit 1
+          }
+
+      - name: Build Standalone with PyInstaller
+        shell: pwsh
+        run: |
+          pyinstaller --noconfirm --clean `
+            --name "${{ env.APP_NAME }}" `
+            --onefile `
+            --windowed `
+            --noconsole `
+            --icon "assets/nanki-icon.ico" `
+            --add-data "src/noteforge_anki_studio;noteforge_anki_studio" `
+            --add-data "src/noteforge_anki_studio/static;noteforge_anki_studio/static" `
+            --add-data "src/noteforge_anki_studio/templates;noteforge_anki_studio/templates" `
+            --add-data "assets;assets" `
+            --hidden-import noteforge_anki_studio `
+            --hidden-import noteforge_anki_studio.ai `
+            --hidden-import noteforge_anki_studio.anki_connect `
+            --hidden-import noteforge_anki_studio.config `
+            --hidden-import noteforge_anki_studio.coverage `
+            --hidden-import noteforge_anki_studio.exporters `
+            --hidden-import noteforge_anki_studio.importers `
+            --hidden-import noteforge_anki_studio.models `
+            --hidden-import noteforge_anki_studio.storage `
+            --hidden-import webview `
+            --hidden-import webview.platforms.winforms `
+            --hidden-import mistune `
+            --hidden-import markdownify `
+            --collect-all noteforge_anki_studio `
+            --distpath dist-standalone `
+            --workpath build-standalone `
+            standalone.py
+
+      - name: List built files
+        shell: pwsh
+        run: |
+          Write-Host "Built files:"
+          Get-ChildItem dist-standalone -Recurse | Select-Object FullName, Length
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nanki-standalone-windows
+          path: dist-standalone/Nanki-Standalone.exe
+          retention-days: 30
+
+  build-macos:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pyinstaller pyinstaller-hooks-contrib pywebview
+
+      - name: Generate icons
+        run: |
+          python assets/generate-icons.py
+          ls -la assets/nanki-icon.*
+
+      - name: Validate macOS icon
+        run: |
+          if [ ! -f "assets/nanki-icon.icns" ]; then
+            echo "Missing macOS icon: assets/nanki-icon.icns"
+            exit 1
+          fi
+
+      - name: Build Standalone with PyInstaller
+        run: |
+          pyinstaller --noconfirm --clean \
+            --name "${{ env.APP_NAME }}" \
+            --onefile \
+            --windowed \
+            --icon "assets/nanki-icon.icns" \
+            --osx-bundle-identifier "com.nanki.standalone" \
+            --target-arch arm64 \
+            --add-data "src/noteforge_anki_studio:noteforge_anki_studio" \
+            --add-data "src/noteforge_anki_studio/static:noteforge_anki_studio/static" \
+            --add-data "src/noteforge_anki_studio/templates:noteforge_anki_studio/templates" \
+            --add-data "assets:assets" \
+            --hidden-import noteforge_anki_studio \
+            --hidden-import webview \
+            --hidden-import webview.platforms.cocoa \
+            --collect-all noteforge_anki_studio \
+            --distpath dist-standalone \
+            --workpath build-standalone \
+            standalone.py
+
+      - name: List built files
+        run: |
+          echo "Built files:"
+          ls -la dist-standalone/
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nanki-standalone-macos
+          path: dist-standalone/Nanki-Standalone
+          retention-days: 30
+
+  create-release:
+    needs: [build-windows, build-macos]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: nanki-standalone-windows
+          path: dist
+
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: nanki-standalone-macos
+          path: dist
+
+      - name: Create release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Nanki Standalone v${{ env.APP_VERSION }}
+          body: |
+            Standalone version (no HTTP server)
+            
+            - Faster startup (~0.5s)
+            - Lower memory usage
+            - No port conflicts
+            
+            ## Features
+            All features from standard Nanki:
+            - Notes and flashcards
+            - Anki integration
+            - AI-powered card generation
+            - Import/Export
+          files: |
+            dist/Nanki-Standalone.exe
+            dist/Nanki-Standalone
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
