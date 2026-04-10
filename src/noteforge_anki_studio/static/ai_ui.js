@@ -69,6 +69,7 @@
       'ai.explainModel': 'Explain model',
       'ai.flashcardModel': 'Flashcard model',
       'ai.autoFlashcardModel': 'Auto-card model',
+      'ai.language': 'AI language',
       'ai.noteOnlyChat': 'Chat should only use the user\'s own text',
       'ai.noteOnlyExplain': 'Explain should only use the user\'s own text',
       'ai.useAnkiCoverage': 'Use semantic coverage context from all scanned Anki cards for card generation',
@@ -151,6 +152,7 @@
       'ai.explainModel': 'Explain-Modell',
       'ai.flashcardModel': 'Karteikarten-Modell',
       'ai.autoFlashcardModel': 'Auto-Karten-Modell',
+      'ai.language': 'KI-Sprache',
       'ai.noteOnlyChat': 'Chat soll nur mit dem eigenen Text arbeiten',
       'ai.noteOnlyExplain': 'Explain soll nur mit dem eigenen Text arbeiten',
       'ai.useAnkiCoverage': 'Semantischen Coverage-Kontext aus allen gescannten Anki-Karten für die Kartenerstellung verwenden',
@@ -328,6 +330,13 @@
             <label>
               <span data-ai-i18n="ai.autoFlashcardModel"></span>
               <select id="ai-auto-flashcard-model"></select>
+            </label>
+            <label class="wide">
+              <span data-ai-i18n="ai.language"></span>
+              <select id="ai-language">
+                <option value="en">English</option>
+                <option value="de">Deutsch</option>
+              </select>
             </label>
             <label class="checkbox-row wide">
               <input id="ai-chat-note-only" type="checkbox" />
@@ -531,6 +540,7 @@
       aiExplainModel: document.getElementById('ai-explain-model'),
       aiFlashcardModel: document.getElementById('ai-flashcard-model'),
       aiAutoFlashcardModel: document.getElementById('ai-auto-flashcard-model'),
+      aiLanguage: document.getElementById('ai-language'),
       aiChatNoteOnly: document.getElementById('ai-chat-note-only'),
       aiExplainNoteOnly: document.getElementById('ai-explain-note-only'),
       aiUseAnkiCoverage: document.getElementById('ai-use-anki-coverage'),
@@ -617,6 +627,7 @@
     aiEls.aiExplainModel.value = ai.explain_model || '';
     aiEls.aiFlashcardModel.value = ai.flashcard_model || '';
     aiEls.aiAutoFlashcardModel.value = ai.auto_flashcard_model || '';
+    aiEls.aiLanguage.value = ai.language || 'en';
     aiEls.aiChatNoteOnly.checked = Boolean(ai.chat_note_only);
     aiEls.aiExplainNoteOnly.checked = Boolean(ai.explain_note_only);
     aiEls.aiUseAnkiCoverage.checked = Boolean(ai.use_anki_coverage_context);
@@ -650,6 +661,7 @@
     ai.explain_model = aiEls.aiExplainModel?.value.trim() || '';
     ai.flashcard_model = aiEls.aiFlashcardModel?.value.trim() || '';
     ai.auto_flashcard_model = aiEls.aiAutoFlashcardModel?.value.trim() || '';
+    ai.language = aiEls.aiLanguage?.value || 'en';
     ai.chat_note_only = Boolean(aiEls.aiChatNoteOnly?.checked);
     ai.explain_note_only = Boolean(aiEls.aiExplainNoteOnly?.checked);
     ai.use_anki_coverage_context = Boolean(aiEls.aiUseAnkiCoverage?.checked);

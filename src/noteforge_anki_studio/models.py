@@ -40,6 +40,7 @@ class AISettings(BaseModel):
     explain_model: str = ""
     flashcard_model: str = ""
     auto_flashcard_model: str = ""
+    language: AppLanguage = "en"
     use_anki_coverage_context: bool = True
     chat_note_only: bool = False
     explain_note_only: bool = False

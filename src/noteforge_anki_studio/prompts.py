@@ -35,6 +35,7 @@ Hard rules:
 - every card must include source_excerpt copied verbatim from the provided source text
 - do not output reasoning, analysis, commentary, markdown fences, or any text before or after the JSON
 - return JSON only
+- use the same language as the source text unless explicitly instructed otherwise
 
 Return this exact JSON shape:
 {
@@ -65,6 +66,7 @@ Hard rules:
 - every card must include source_excerpt copied verbatim from the provided source text
 - do not output reasoning, analysis, commentary, markdown fences, or any text before or after the JSON
 - return JSON only
+- use the same language as the source text unless explicitly instructed otherwise
 
 Return this exact JSON shape:
 {

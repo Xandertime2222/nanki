@@ -613,6 +613,7 @@ class AIService:
             "note_title": note.meta.title,
             "source_text": source_text,
             "semantic_existing_card_context": coverage_context,
+            "language_instruction": f"Generate all cards in {settings.ai.language} language.",
         }
         if not auto_count:
             user_payload["target_count"] = target_count
