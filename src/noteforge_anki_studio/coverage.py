@@ -30,42 +30,362 @@ WORD_PATTERN = re.compile(r"\b\w+\b", re.UNICODE)
 # variable-width lookbehind limitations.
 SENTENCE_BOUNDARY = re.compile(r"([.!?])\s+(?=[A-ZÄÖÜÉÈÊ0-9(\"„«\[])", re.UNICODE)
 PARAGRAPH_BREAK = re.compile(r"\n\s*\n")
-ABBREVIATIONS = frozenset({
-    "z", "etc", "dr", "nr", "abb", "kap", "vgl", "ca", "mr", "ms", "vs",
-    "prof", "bzw", "bsp", "inkl", "ggf", "evtl", "usw", "sog",
-})
+ABBREVIATIONS = frozenset(
+    {
+        "z",
+        "etc",
+        "dr",
+        "nr",
+        "abb",
+        "kap",
+        "vgl",
+        "ca",
+        "mr",
+        "ms",
+        "vs",
+        "prof",
+        "bzw",
+        "bsp",
+        "inkl",
+        "ggf",
+        "evtl",
+        "usw",
+        "sog",
+    }
+)
 
 # ---------------------------------------------------------------------------
 # Stop words (EN + DE) – filtered from keyword extraction
 # ---------------------------------------------------------------------------
 
-STOP_WORDS: frozenset[str] = frozenset({
-    # English
-    "the", "and", "for", "are", "but", "not", "you", "all", "can", "was",
-    "one", "our", "out", "had", "has", "its", "say", "she", "too", "use",
-    "who", "how", "did", "get", "may", "him", "his", "now", "see", "two",
-    "also", "back", "been", "from", "have", "here", "just", "know", "like",
-    "look", "make", "many", "more", "much", "must", "only", "over", "some",
-    "such", "take", "than", "that", "them", "then", "they", "this", "time",
-    "very", "want", "well", "what", "when", "which", "will", "with", "your",
-    "about", "could", "first", "into", "most", "other", "their", "there",
-    "these", "think", "those", "under", "where", "would", "being", "does",
-    "each", "every", "given", "made", "same", "should", "since", "still",
-    "while",
-    # German
-    "der", "die", "das", "ein", "eine", "einer", "eines", "einem", "einen",
-    "und", "ist", "sind", "war", "hat", "haben", "wird", "werden", "kann",
-    "mit", "von", "auf", "für", "nicht", "sich", "bei", "aus", "nach",
-    "wie", "als", "aber", "oder", "wenn", "auch", "noch", "nur", "über",
-    "vor", "bis", "durch", "unter", "gegen", "ohne", "zwischen", "dieser",
-    "diese", "dieses", "diesem", "diesen", "jeder", "jede", "jedes",
-    "kein", "keine", "keiner", "keines", "hier", "dort", "dann", "weil",
-    "dass", "denn", "zum", "zur", "dem", "den", "des", "was", "wer",
-    "man", "sehr", "schon", "immer", "wieder", "mehr", "viel", "andere",
-    "anderen", "anderer", "anderes", "anderem", "also", "bereits", "dabei",
-    "damit", "dazu", "jedoch", "sowie", "werden", "wurden", "wird", "wurde",
-    "können", "soll", "sollen", "muss", "müssen", "darf", "dürfen",
-})
+STOP_WORDS: frozenset[str] = frozenset(
+    {
+        # English
+        "the",
+        "and",
+        "for",
+        "are",
+        "but",
+        "not",
+        "you",
+        "all",
+        "can",
+        "was",
+        "one",
+        "our",
+        "out",
+        "had",
+        "has",
+        "its",
+        "say",
+        "she",
+        "too",
+        "use",
+        "who",
+        "how",
+        "did",
+        "get",
+        "may",
+        "him",
+        "his",
+        "now",
+        "see",
+        "two",
+        "also",
+        "back",
+        "been",
+        "from",
+        "have",
+        "here",
+        "just",
+        "know",
+        "like",
+        "look",
+        "make",
+        "many",
+        "more",
+        "much",
+        "must",
+        "only",
+        "over",
+        "some",
+        "such",
+        "take",
+        "than",
+        "that",
+        "them",
+        "then",
+        "they",
+        "this",
+        "time",
+        "very",
+        "want",
+        "well",
+        "what",
+        "when",
+        "which",
+        "will",
+        "with",
+        "your",
+        "about",
+        "could",
+        "first",
+        "into",
+        "most",
+        "other",
+        "their",
+        "there",
+        "these",
+        "think",
+        "those",
+        "under",
+        "where",
+        "would",
+        "being",
+        "does",
+        "each",
+        "every",
+        "given",
+        "made",
+        "same",
+        "should",
+        "since",
+        "still",
+        "while",
+        # German
+        "der",
+        "die",
+        "das",
+        "ein",
+        "eine",
+        "einer",
+        "eines",
+        "einem",
+        "einen",
+        "und",
+        "ist",
+        "sind",
+        "war",
+        "hat",
+        "haben",
+        "wird",
+        "werden",
+        "kann",
+        "mit",
+        "von",
+        "auf",
+        "für",
+        "nicht",
+        "sich",
+        "bei",
+        "aus",
+        "nach",
+        "wie",
+        "als",
+        "aber",
+        "oder",
+        "wenn",
+        "auch",
+        "noch",
+        "nur",
+        "über",
+        "vor",
+        "bis",
+        "durch",
+        "unter",
+        "gegen",
+        "ohne",
+        "zwischen",
+        "dieser",
+        "diese",
+        "dieses",
+        "diesem",
+        "diesen",
+        "jeder",
+        "jede",
+        "jedes",
+        "kein",
+        "keine",
+        "keiner",
+        "keines",
+        "hier",
+        "dort",
+        "dann",
+        "weil",
+        "dass",
+        "denn",
+        "zum",
+        "zur",
+        "dem",
+        "den",
+        "des",
+        "was",
+        "wer",
+        "man",
+        "sehr",
+        "schon",
+        "immer",
+        "wieder",
+        "mehr",
+        "viel",
+        "andere",
+        "anderen",
+        "anderer",
+        "anderes",
+        "anderem",
+        "also",
+        "bereits",
+        "dabei",
+        "damit",
+        "dazu",
+        "jedoch",
+        "sowie",
+        "werden",
+        "wurden",
+        "wird",
+        "wurde",
+        "können",
+        "soll",
+        "sollen",
+        # Meta-terms that cause false positives in both languages
+        "text",
+        "note",
+        "notes",
+        "card",
+        "cards",
+        "content",
+        "section",
+        "sections",
+        "information",
+        "example",
+        "examples",
+        "page",
+        "pages",
+        "chapter",
+        "chapters",
+        "topic",
+        "topics",
+        "part",
+        "parts",
+        "point",
+        "points",
+        "way",
+        "ways",
+        "thing",
+        "things",
+        "kind",
+        "kinds",
+        "type",
+        "types",
+        "form",
+        "forms",
+        "case",
+        "cases",
+        "fact",
+        "facts",
+        "idea",
+        "ideas",
+        "concept",
+        "concepts",
+        "term",
+        "terms",
+        "word",
+        "words",
+        "sentence",
+        "sentences",
+        "paragraph",
+        "paragraphs",
+        "article",
+        "articles",
+        "definition",
+        "definitions",
+        "description",
+        "descriptions",
+        "explanation",
+        "explanations",
+        "detail",
+        "details",
+        "aspect",
+        "aspects",
+        "feature",
+        "features",
+        "element",
+        "elements",
+        "component",
+        "components",
+        "structure",
+        "structures",
+        "system",
+        "systems",
+        "method",
+        "methods",
+        "approach",
+        "approaches",
+        "process",
+        "processes",
+        "step",
+        "steps",
+        "result",
+        "results",
+        "outcome",
+        "outcomes",
+        "effect",
+        "effects",
+        "cause",
+        "causes",
+        "reason",
+        "reasons",
+        "purpose",
+        "purposes",
+        "function",
+        "functions",
+        "role",
+        "roles",
+        "use",
+        "uses",
+        "usage",
+        "application",
+        "applications",
+        "context",
+        "contexts",
+        "level",
+        "levels",
+        "degree",
+        "degrees",
+        "range",
+        "ranges",
+        "area",
+        "areas",
+        "field",
+        "fields",
+        "domain",
+        "domains",
+        "category",
+        "categories",
+        "class",
+        "classes",
+        "group",
+        "groups",
+        "set",
+        "sets",
+        "list",
+        "lists",
+        "number",
+        "numbers",
+        "amount",
+        "amounts",
+        "quantity",
+        "quantities",
+        "value",
+        "values",
+        "data",
+        "knowledge",
+        "muss",
+        "müssen",
+        "darf",
+        "dürfen",
+    }
+)
 
 CardLike = Card | AnkiLibraryCard
 
@@ -97,6 +417,7 @@ class Section:
 @dataclass(slots=True)
 class SentenceMapping:
     """Which card covers which sentence, and how confidently."""
+
     sentence_index: int
     card_id: str
     confidence: float
@@ -137,20 +458,68 @@ def has_alpha(text: str) -> bool:
 # match is removed first. Used for light stemming so morphological variants
 # (e.g. "Welle" / "Wellen", "running" / "runs") collapse onto the same stem.
 _DE_SUFFIXES = (
-    "ungen", "lichen", "lichem", "licher", "liches", "lich",
-    "isch", "iert", "ierte", "iertes", "ierten",
-    "keit", "heit", "schaft",
-    "ung", "ern", "end", "est",
-    "en", "em", "er", "es", "et",
-    "te", "st", "ts", "n", "s", "e",
+    "ungen",
+    "lichen",
+    "lichem",
+    "licher",
+    "liches",
+    "lich",
+    "isch",
+    "iert",
+    "ierte",
+    "iertes",
+    "ierten",
+    "keit",
+    "heit",
+    "schaft",
+    "ung",
+    "ern",
+    "end",
+    "est",
+    "en",
+    "em",
+    "er",
+    "es",
+    "et",
+    "te",
+    "st",
+    "ts",
+    "n",
+    "s",
+    "e",
 )
 _EN_SUFFIXES = (
-    "ational", "tional", "ization", "ational", "fulness",
-    "ousness", "iveness",
-    "ation", "ement", "ness", "ling", "able", "ible",
-    "ment", "ence", "ance", "ical", "ious", "ously",
-    "ing", "ies", "ied", "est", "ers", "ity",
-    "ed", "es", "ly", "er", "or", "al",
+    "ational",
+    "tional",
+    "ization",
+    "ational",
+    "fulness",
+    "ousness",
+    "iveness",
+    "ation",
+    "ement",
+    "ness",
+    "ling",
+    "able",
+    "ible",
+    "ment",
+    "ence",
+    "ance",
+    "ical",
+    "ious",
+    "ously",
+    "ing",
+    "ies",
+    "ied",
+    "est",
+    "ers",
+    "ity",
+    "ed",
+    "es",
+    "ly",
+    "er",
+    "or",
+    "al",
     "s",
 )
 
@@ -174,8 +543,7 @@ def stem_word(word: str) -> str:
     w = _strip_suffix(w, _DE_SUFFIXES)
     w = _strip_suffix(w, _EN_SUFFIXES)
     # Collapse umlauts to ASCII so "Größe" and "Groesse" align.
-    w = (w.replace("ä", "a").replace("ö", "o").replace("ü", "u")
-          .replace("ß", "ss"))
+    w = w.replace("ä", "a").replace("ö", "o").replace("ü", "u").replace("ß", "ss")
     return w
 
 
@@ -201,16 +569,20 @@ def extract_char_ngrams(text: str, n: int = 4) -> set[str]:
     """
     if not text:
         return set()
-    cleaned = (text.lower()
-               .replace("ä", "a").replace("ö", "o").replace("ü", "u")
-               .replace("ß", "ss"))
+    cleaned = (
+        text.lower()
+        .replace("ä", "a")
+        .replace("ö", "o")
+        .replace("ü", "u")
+        .replace("ß", "ss")
+    )
     out: set[str] = set()
     for token in re.findall(r"[a-z0-9]+", cleaned):
         if len(token) < n:
             out.add(token)
             continue
         for i in range(len(token) - n + 1):
-            out.add(token[i:i + n])
+            out.add(token[i : i + n])
     return out
 
 
@@ -222,7 +594,9 @@ def extract_keywords(text: str) -> set[str]:
 
 def extract_bigrams(text: str) -> set[tuple[str, str]]:
     """Extract consecutive-word pairs (bigrams) from text."""
-    words = [w.lower() for w in WORD_PATTERN.findall(text) if len(w) >= 2 and has_alpha(w)]
+    words = [
+        w.lower() for w in WORD_PATTERN.findall(text) if len(w) >= 2 and has_alpha(w)
+    ]
     return {(words[i], words[i + 1]) for i in range(len(words) - 1)}
 
 
@@ -239,7 +613,9 @@ def extract_stem_bigrams(text: str) -> set[tuple[str, str]]:
 
 def extract_trigrams(text: str) -> set[tuple[str, str, str]]:
     """Extract consecutive-word triples (trigrams) from text."""
-    words = [w.lower() for w in WORD_PATTERN.findall(text) if len(w) >= 2 and has_alpha(w)]
+    words = [
+        w.lower() for w in WORD_PATTERN.findall(text) if len(w) >= 2 and has_alpha(w)
+    ]
     return {(words[i], words[i + 1], words[i + 2]) for i in range(len(words) - 2)}
 
 
@@ -254,7 +630,7 @@ def _is_abbreviation(text: str, dot_pos: int) -> bool:
     i = dot_pos - 1
     while i >= 0 and text[i].isalpha():
         i -= 1
-    word = text[i + 1:dot_pos].lower()
+    word = text[i + 1 : dot_pos].lower()
     if word in ABBREVIATIONS:
         return True
     # Single-letter abbreviation (e.g. "z. B.", "S. 4")
@@ -272,7 +648,7 @@ def _split_text_block(text: str, offset: int) -> list[Sentence]:
     paragraphs: list[tuple[int, str]] = []
     last = 0
     for m in PARAGRAPH_BREAK.finditer(text):
-        paragraphs.append((last, text[last:m.start()]))
+        paragraphs.append((last, text[last : m.start()]))
         last = m.end()
     paragraphs.append((last, text[last:]))
 
@@ -301,13 +677,15 @@ def _split_text_block(text: str, offset: int) -> list[Sentence]:
             actual_end = para_offset + e
             abs_start = offset + actual_start
             abs_end = offset + actual_end
-            result.append(Sentence(
-                text=chunk,
-                start=abs_start,
-                end=abs_end,
-                is_heading=False,
-                is_content=len(chunk) >= 4 and has_alpha(chunk),
-            ))
+            result.append(
+                Sentence(
+                    text=chunk,
+                    start=abs_start,
+                    end=abs_end,
+                    is_heading=False,
+                    is_content=len(chunk) >= 4 and has_alpha(chunk),
+                )
+            )
 
     return result
 
@@ -323,7 +701,9 @@ def split_sentences(content: str) -> list[Sentence]:
 
     heading_spans: list[tuple[int, int, str, int]] = []
     for m in HEADING_PATTERN.finditer(content):
-        heading_spans.append((m.start(), m.end(), normalize_space(m.group(2)), len(m.group(1))))
+        heading_spans.append(
+            (m.start(), m.end(), normalize_space(m.group(2)), len(m.group(1)))
+        )
 
     sentences: list[Sentence] = []
     cursor = 0
@@ -331,13 +711,15 @@ def split_sentences(content: str) -> list[Sentence]:
     for h_start, h_end, h_title, h_level in heading_spans:
         if cursor < h_start:
             sentences.extend(_split_text_block(content[cursor:h_start], cursor))
-        sentences.append(Sentence(
-            text=h_title,
-            start=h_start,
-            end=h_end,
-            is_heading=True,
-            is_content=False,
-        ))
+        sentences.append(
+            Sentence(
+                text=h_title,
+                start=h_start,
+                end=h_end,
+                is_heading=True,
+                is_content=False,
+            )
+        )
         cursor = h_end
 
     if cursor < len(content):
@@ -353,18 +735,26 @@ def split_sentences(content: str) -> list[Sentence]:
 
 def parse_sections(content: str) -> list[Section]:
     headings = [
-        Section(title=normalize_space(m.group(2)), level=len(m.group(1)),
-                start=m.start(), end=m.end())
+        Section(
+            title=normalize_space(m.group(2)),
+            level=len(m.group(1)),
+            start=m.start(),
+            end=m.end(),
+        )
         for m in HEADING_PATTERN.finditer(content)
     ]
     if not headings:
         return [Section(title="Full note", level=1, start=0, end=len(content))]
     sections: list[Section] = []
-    if normalize_space(content[:headings[0].start]):
-        sections.append(Section(title="Introduction", level=1, start=0, end=headings[0].start))
+    if normalize_space(content[: headings[0].start]):
+        sections.append(
+            Section(title="Introduction", level=1, start=0, end=headings[0].start)
+        )
     for i, h in enumerate(headings):
         next_start = headings[i + 1].start if i + 1 < len(headings) else len(content)
-        sections.append(Section(title=h.title, level=h.level, start=h.start, end=next_start))
+        sections.append(
+            Section(title=h.title, level=h.level, start=h.start, end=next_start)
+        )
     return sections
 
 
@@ -475,7 +865,9 @@ def card_all_char_ngrams(card: CardLike, n: int = 4) -> set[str]:
 
 
 def _anchor_sentence_indices(
-    sentences: list[Sentence], anchor: CoverageAnchor | None, content: str,
+    sentences: list[Sentence],
+    anchor: CoverageAnchor | None,
+    content: str,
 ) -> list[int]:
     """Find sentence indices that overlap the anchor's stored range."""
     if anchor is None:
@@ -490,12 +882,16 @@ def _anchor_sentence_indices(
             break
     if start is None or end is None:
         return []
-    return [i for i, sent in enumerate(sentences)
-            if sent.end > start and sent.start < end and sent.is_content]
+    return [
+        i
+        for i, sent in enumerate(sentences)
+        if sent.end > start and sent.start < end and sent.is_content
+    ]
 
 
 def _substring_sentence_indices(
-    sentences: list[Sentence], text: str,
+    sentences: list[Sentence],
+    text: str,
 ) -> list[int]:
     """Find sentences whose text contains the given substring (case-insensitive)."""
     if not text or len(text) < 6:
@@ -528,7 +924,9 @@ def _find_in_content(content: str, excerpt: str) -> list[tuple[int, int]]:
 
 
 def _excerpt_sentence_indices(
-    sentences: list[Sentence], content: str, excerpt: str,
+    sentences: list[Sentence],
+    content: str,
+    excerpt: str,
 ) -> list[int]:
     """Find sentences that overlap with positions where excerpt appears in content."""
     spans = _find_in_content(content, excerpt)
@@ -558,7 +956,9 @@ def _stems_compatible(a: str, b: str) -> bool:
     return a.startswith(b)
 
 
-def _best_stem_match_length(card_stem: str, sent_stems: set[str], sent_prefix4: set[str]) -> int:
+def _best_stem_match_length(
+    card_stem: str, sent_stems: set[str], sent_prefix4: set[str]
+) -> int:
     """Return the length of the longest sentence-stem that is compatible
     with this card stem (0 if none). Used so longer matches dominate.
     """
@@ -575,7 +975,9 @@ def _best_stem_match_length(card_stem: str, sent_stems: set[str], sent_prefix4: 
     return best
 
 
-def _bigram_overlap_score(sent_bigrams: set[tuple[str, str]], card_bigrams: set[tuple[str, str]]) -> float:
+def _bigram_overlap_score(
+    sent_bigrams: set[tuple[str, str]], card_bigrams: set[tuple[str, str]]
+) -> float:
     """Fraction of card bigrams found in the sentence (prefix-aware)."""
     if not card_bigrams:
         return 0.0
@@ -654,6 +1056,7 @@ def _char_ngram_jaccard(a: set[str], b: set[str]) -> float:
 class CardSignature:
     """Pre-computed contextual fingerprint of a card. Building this once per
     card lets us score it cheaply against every sentence."""
+
     stems: set[str]
     stem_bigrams: set[tuple[str, str]]
     char_ngrams: set[str]
@@ -712,9 +1115,9 @@ def _contextual_score(
     return min(1.0, score)
 
 
-MIN_BIGRAM_CONFIDENCE = 0.25       # legacy threshold (kept for compat)
-MIN_KEYWORD_CONFIDENCE = 0.15      # legacy threshold (kept for compat)
-MIN_CONTEXTUAL_CONFIDENCE = 0.32   # ≥32% combined contextual score
+MIN_BIGRAM_CONFIDENCE = 0.25  # legacy threshold (kept for compat)
+MIN_KEYWORD_CONFIDENCE = 0.15  # legacy threshold (kept for compat)
+MIN_CONTEXTUAL_CONFIDENCE = 0.45  # ≥45% combined contextual score
 
 
 def match_card_to_sentences(
@@ -767,9 +1170,12 @@ def match_card_to_sentences(
 
     # Level 3: Contextual similarity. Requires precomputed sentence features.
     sig = card_signature if card_signature is not None else build_card_signature(card)
-    if (sig.stems and sentence_stems is not None
-            and sentence_stem_bigrams is not None
-            and sentence_char_ngrams is not None):
+    if (
+        sig.stems
+        and sentence_stems is not None
+        and sentence_stem_bigrams is not None
+        and sentence_char_ngrams is not None
+    ):
         scored: list[tuple[int, float]] = []
         best_score = 0.0
         for i, sent in enumerate(sentences):
@@ -803,7 +1209,9 @@ def match_card_to_sentences(
 # ---------------------------------------------------------------------------
 
 
-def coverage_html(content: str, sentences: list[Sentence], sentence_cards: list[set[str]]) -> str:
+def coverage_html(
+    content: str, sentences: list[Sentence], sentence_cards: list[set[str]]
+) -> str:
     """Render content with sentence-level coverage highlighting."""
     if not sentences:
         return '<pre class="coverage-text empty">No text available for coverage analysis.</pre>'
@@ -814,9 +1222,9 @@ def coverage_html(content: str, sentences: list[Sentence], sentence_cards: list[
     for sent, card_ids in zip(sentences, sentence_cards, strict=False):
         # Add any gap between cursor and this sentence
         if cursor < sent.start:
-            parts.append(html.escape(content[cursor:sent.start]))
+            parts.append(html.escape(content[cursor : sent.start]))
 
-        sent_html = html.escape(content[sent.start:sent.end])
+        sent_html = html.escape(content[sent.start : sent.end])
 
         if sent.is_heading:
             parts.append(sent_html)
@@ -836,9 +1244,7 @@ def coverage_html(content: str, sentences: list[Sentence], sentence_cards: list[
                 f'data-card-ids="{ids}">{sent_html}</span>'
             )
         else:
-            parts.append(
-                f'<span class="coverage-token uncovered">{sent_html}</span>'
-            )
+            parts.append(f'<span class="coverage-token uncovered">{sent_html}</span>')
 
         cursor = sent.end
 
@@ -854,8 +1260,13 @@ def coverage_html(content: str, sentences: list[Sentence], sentence_cards: list[
 # ---------------------------------------------------------------------------
 
 
-def _build_gap(content: str, sentences: list[Sentence], sections: list[Section],
-               start_idx: int, end_idx: int) -> dict:
+def _build_gap(
+    content: str,
+    sentences: list[Sentence],
+    sections: list[Section],
+    start_idx: int,
+    end_idx: int,
+) -> dict:
     start = sentences[start_idx].start
     end = sentences[end_idx].end
     count = end_idx - start_idx + 1
@@ -872,8 +1283,12 @@ def _build_gap(content: str, sentences: list[Sentence], sections: list[Section],
     }
 
 
-def find_gaps(content: str, sentences: list[Sentence], sentence_cards: list[set[str]],
-              sections: list[Section]) -> list[dict]:
+def find_gaps(
+    content: str,
+    sentences: list[Sentence],
+    sentence_cards: list[set[str]],
+    sections: list[Section],
+) -> list[dict]:
     """Find runs of consecutive uncovered content sentences."""
     content_indices = [i for i, s in enumerate(sentences) if s.is_content]
     gaps: list[dict] = []
@@ -881,14 +1296,18 @@ def find_gaps(content: str, sentences: list[Sentence], sentence_cards: list[set[
     for ci in content_indices:
         if sentence_cards[ci]:
             if run_start is not None:
-                gaps.append(_build_gap(content, sentences, sections, run_start, prev_ci))
+                gaps.append(
+                    _build_gap(content, sentences, sections, run_start, prev_ci)
+                )
                 run_start = None
         else:
             if run_start is None:
                 run_start = ci
             prev_ci = ci
     if run_start is not None:
-        gaps.append(_build_gap(content, sentences, sections, run_start, content_indices[-1]))
+        gaps.append(
+            _build_gap(content, sentences, sections, run_start, content_indices[-1])
+        )
     gaps.sort(key=lambda g: (-g["sentence_count"], g["start"]))
     return gaps[:12]
 
@@ -936,7 +1355,9 @@ def card_overlaps_note(
 # ---------------------------------------------------------------------------
 
 
-def best_excerpt_for_candidates(content: str, candidates: Iterable[str], *, limit: int = 220) -> str:
+def best_excerpt_for_candidates(
+    content: str, candidates: Iterable[str], *, limit: int = 220
+) -> str:
     normalized = [plain_card_text(c) for c in candidates if plain_card_text(c)]
     if not content.strip():
         return ""
@@ -944,8 +1365,8 @@ def best_excerpt_for_candidates(content: str, candidates: Iterable[str], *, limi
         spans = _find_in_content(content, candidate)
         if spans:
             best = max(spans, key=lambda s: s[1] - s[0])
-            text = normalize_space(content[best[0]:best[1]])
-            return text if len(text) <= limit else text[:limit - 1].rstrip() + "…"
+            text = normalize_space(content[best[0] : best[1]])
+            return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
     # Fallback: keyword overlap to find best region
     merged_kw = set()
     for c in normalized:
@@ -963,9 +1384,9 @@ def best_excerpt_for_candidates(content: str, candidates: Iterable[str], *, limi
                 best_sent = sent
         if best_sent:
             text = normalize_space(best_sent.text)
-            return text if len(text) <= limit else text[:limit - 1].rstrip() + "…"
+            return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
     text = normalize_space(content)
-    return text if len(text) <= limit else text[:limit - 1].rstrip() + "…"
+    return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
 
 
 # ---------------------------------------------------------------------------
@@ -975,11 +1396,13 @@ def best_excerpt_for_candidates(content: str, candidates: Iterable[str], *, limi
 
 def _excerpt(text: str, limit: int = 120) -> str:
     text = normalize_space(text)
-    return text if len(text) <= limit else text[:limit - 1].rstrip() + "…"
+    return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
 
 
 def build_card_result(
-    card: CardLike, *, mapped: bool,
+    card: CardLike,
+    *,
+    mapped: bool,
     matched_sentences: list[SentenceMapping] | None = None,
     content: str = "",
     sections: list[Section] | None = None,
@@ -1015,7 +1438,9 @@ def build_card_result(
                 range_start = first_sent.start
                 range_end = last_sent.end
                 selected = normalize_space(content[range_start:range_end])
-                section_title_sec = section_for_offset(sections, first_sent.start) if sections else None
+                section_title_sec = (
+                    section_for_offset(sections, first_sent.start) if sections else None
+                )
                 section_title = section_title_sec.title if section_title_sec else None
 
     back_text = plain_card_text(str(card_attr(card, "back", "")))
@@ -1066,11 +1491,21 @@ def build_note_coverage(
     # Pre-compute features for each sentence. Stems / stem-bigrams / char
     # n-grams power the new contextual matcher; the old keyword/bigram sets
     # stay around because some external callers (e.g. ai.py) still use them.
-    sentence_keywords = [extract_keywords(s.text) if s.is_content else set() for s in sentences]
-    sentence_bigrams = [extract_bigrams(s.text) if s.is_content else set() for s in sentences]
-    sentence_stems = [extract_stems(s.text) if s.is_content else set() for s in sentences]
-    sentence_stem_bigrams = [extract_stem_bigrams(s.text) if s.is_content else set() for s in sentences]
-    sentence_char_ngrams = [extract_char_ngrams(s.text) if s.is_content else set() for s in sentences]
+    sentence_keywords = [
+        extract_keywords(s.text) if s.is_content else set() for s in sentences
+    ]
+    sentence_bigrams = [
+        extract_bigrams(s.text) if s.is_content else set() for s in sentences
+    ]
+    sentence_stems = [
+        extract_stems(s.text) if s.is_content else set() for s in sentences
+    ]
+    sentence_stem_bigrams = [
+        extract_stem_bigrams(s.text) if s.is_content else set() for s in sentences
+    ]
+    sentence_char_ngrams = [
+        extract_char_ngrams(s.text) if s.is_content else set() for s in sentences
+    ]
 
     # Per-sentence card sets
     sentence_cards: list[set[str]] = [set() for _ in sentences]
@@ -1080,7 +1515,8 @@ def build_note_coverage(
     note_kw = extract_keywords(plain_card_text(content))
     note_stems = extract_stems(plain_card_text(content))
     external_candidates = [
-        c for c in external_cards
+        c
+        for c in external_cards
         if card_overlaps_note(content, note_kw, c, note_stems=note_stems)
     ]
 
@@ -1090,7 +1526,10 @@ def build_note_coverage(
     for card in local_cards:
         signature = build_card_signature(card)
         mappings = match_card_to_sentences(
-            sentences, content, sections, card,
+            sentences,
+            content,
+            sections,
+            card,
             sentence_keywords=sentence_keywords,
             sentence_bigrams=sentence_bigrams,
             sentence_stems=sentence_stems,
@@ -1103,17 +1542,25 @@ def build_note_coverage(
             continue
         for m in mappings:
             sentence_cards[m.sentence_index].add(str(card.id))
-        card_results.append(build_card_result(
-            card, mapped=True, matched_sentences=mappings,
-            content=content, sections=sections,
-        ))
+        card_results.append(
+            build_card_result(
+                card,
+                mapped=True,
+                matched_sentences=mappings,
+                content=content,
+                sections=sections,
+            )
+        )
 
     # Map external (Anki) cards
     matched_external: list[dict[str, Any]] = []
     for card in external_candidates:
         signature = build_card_signature(card)
         mappings = match_card_to_sentences(
-            sentences, content, sections, card,
+            sentences,
+            content,
+            sections,
+            card,
             sentence_keywords=sentence_keywords,
             sentence_bigrams=sentence_bigrams,
             sentence_stems=sentence_stems,
@@ -1125,50 +1572,68 @@ def build_note_coverage(
             continue
         for m in mappings:
             sentence_cards[m.sentence_index].add(f"anki:{card.id}")
-        matched_external.append(build_card_result(
-            card, mapped=True, matched_sentences=mappings,
-            content=content, sections=sections,
-        ))
+        matched_external.append(
+            build_card_result(
+                card,
+                mapped=True,
+                matched_sentences=mappings,
+                content=content,
+                sections=sections,
+            )
+        )
 
     card_results.extend(matched_external)
 
     # Compute stats
     total_content = len(content_sentences)
-    covered_content = sum(1 for i, s in enumerate(sentences) if s.is_content and sentence_cards[i])
-    coverage_pct = round((covered_content / total_content) * 100, 1) if total_content else 0.0
+    covered_content = sum(
+        1 for i, s in enumerate(sentences) if s.is_content and sentence_cards[i]
+    )
+    coverage_pct = (
+        round((covered_content / total_content) * 100, 1) if total_content else 0.0
+    )
 
     # Section stats
     section_payloads: list[dict] = []
     uncovered_section_count = 0
     for sec in sections:
-        sec_indices = [i for i, s in enumerate(sentences)
-                       if s.is_content and s.start < sec.end and s.end > sec.start]
+        sec_indices = [
+            i
+            for i, s in enumerate(sentences)
+            if s.is_content and s.start < sec.end and s.end > sec.start
+        ]
         total_sec = len(sec_indices)
         covered_sec = sum(1 for i in sec_indices if sentence_cards[i])
         sec_pct = round((covered_sec / total_sec) * 100, 1) if total_sec else 0.0
         sec_card_ids = sorted({cid for i in sec_indices for cid in sentence_cards[i]})
         if sec_pct < 100:
             uncovered_section_count += 1
-        section_payloads.append({
-            "title": sec.title,
-            "level": sec.level,
-            "start": sec.start,
-            "end": sec.end,
-            "total_words": total_sec,       # re-using field name for compat
-            "covered_words": covered_sec,    # re-using field name for compat
-            "coverage_percent": sec_pct,
-            "card_ids": sec_card_ids,
-        })
+        section_payloads.append(
+            {
+                "title": sec.title,
+                "level": sec.level,
+                "start": sec.start,
+                "end": sec.end,
+                "total_words": total_sec,  # re-using field name for compat
+                "covered_words": covered_sec,  # re-using field name for compat
+                "coverage_percent": sec_pct,
+                "card_ids": sec_card_ids,
+            }
+        )
 
     # Gaps
     gaps = find_gaps(content, sentences, sentence_cards, sections)
 
-    local_mapped = sum(1 for r in card_results if r["origin"] == "local" and r["mapped"])
+    local_mapped = sum(
+        1 for r in card_results if r["origin"] == "local" and r["mapped"]
+    )
     local_unmapped = len(local_cards) - local_mapped
     anki_matched = len(matched_external)
 
     payload_anki = {
-        "available": bool(anki_status.get("available", False)) if anki_status else False,
+        "available": bool(anki_status.get("available", False))
+        if anki_status
+        else False,
         "error": anki_status.get("error") if anki_status else None,
         "total_cards": len(external_cards),
         "considered_cards": len(external_candidates),
@@ -1177,8 +1642,8 @@ def build_note_coverage(
 
     return {
         "stats": {
-            "covered_words": covered_content,   # field name kept for compat
-            "total_words": total_content,        # field name kept for compat
+            "covered_words": covered_content,  # field name kept for compat
+            "total_words": total_content,  # field name kept for compat
             "coverage_percent": coverage_pct,
             "total_cards": len(local_cards),
             "mapped_cards": local_mapped + anki_matched,
