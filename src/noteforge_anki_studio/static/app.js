@@ -525,6 +525,23 @@ const escapeHtml = (value) =>
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
 
+const highlightText = (text, searchTerm) => {
+  if (!searchTerm || !text) return escapeHtml(text);
+  const term = searchTerm.toLowerCase();
+  const textLower = text.toLowerCase();
+  let result = '';
+  let lastIndex = 0;
+  let index = textLower.indexOf(term);
+  while (index !== -1) {
+    result += escapeHtml(text.slice(lastIndex, index));
+    result += `<mark>${escapeHtml(text.slice(index, index + term.length))}</mark>`;
+    lastIndex = index + term.length;
+    index = textLower.indexOf(term, lastIndex);
+  }
+  result += escapeHtml(text.slice(lastIndex));
+  return result;
+};
+
 const currentLanguage = () => state.settings?.language || 'en';
 const localeCode = () => (currentLanguage() === 'de' ? 'de-DE' : 'en-US');
 const translationLookup = (language, key) => I18N[language]?.[key] ?? I18N.en[key] ?? key;
@@ -960,21 +977,24 @@ const renderNoteList = () => {
     return;
   }
 
+  const searchTerm = state.searchTerm.trim().toLowerCase();
+  const showSearchHighlight = searchTerm.length >= 1;
+
   for (const note of items) {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = `note-item ${state.activeNoteId === note.meta.id ? 'active' : ''}`;
     button.innerHTML = `
       <div class="note-item-title-row">
-        <strong>${escapeHtml(note.meta.title)}</strong>
+        <strong>${showSearchHighlight ? highlightText(note.meta.title, searchTerm) : escapeHtml(note.meta.title)}</strong>
         <span class="pill">${note.card_count} ${escapeHtml(t('unit.cards'))}</span>
       </div>
       <div class="note-item-sub muted">
-        <span>${escapeHtml(note.meta.default_deck || 'Default')}</span>
+        <span>${showSearchHighlight ? highlightText(note.meta.default_deck || 'Default', searchTerm) : escapeHtml(note.meta.default_deck || 'Default')}</span>
         <span>${note.word_count} ${escapeHtml(t('unit.words'))}</span>
       </div>
       <div class="note-item-tags">
-        ${(note.meta.tags || []).map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}
+        ${(note.meta.tags || []).map((tag) => showSearchHighlight ? `<span class="tag">${highlightText(tag, searchTerm)}</span>` : `<span class="tag">${escapeHtml(tag)}</span>`).join('')}
         ${note.meta.pinned ? `<span class="tag">${escapeHtml(t('notes.pinned'))}</span>` : ''}
       </div>
     `;
