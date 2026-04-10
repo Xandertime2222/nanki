@@ -3208,6 +3208,14 @@ window.addEventListener('DOMContentLoaded', () => {
     console.error('[Nanki] Init error:', error);
     showToast(error.message, 'error');
   });
+  
+  // Check if first run and show tour
+  const hasSeenTour = localStorage.getItem('nanki_has_seen_tour') === 'true';
+  if (!hasSeenTour) {
+    setTimeout(() => {
+      startTour();
+    }, 1000);
+  }
 });
 
 // Warn before leaving with unsaved changes

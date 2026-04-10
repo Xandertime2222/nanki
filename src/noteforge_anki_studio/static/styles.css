@@ -2082,6 +2082,55 @@ button.loading::after {
   pointer-events: none;
 }
 
+/* --- Feature Tour --- */
+.tour-overlay {
+  display: none;
+}
+
+.tour-modal {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  max-width: 400px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.tour-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-2);
+}
+
+.tour-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.tour-body {
+  padding: 20px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.tour-footer {
+  padding: 16px 20px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface-2);
+}
+
+.tour-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .loading-overlay:not(.hidden) {
   display: grid;
   pointer-events: auto;
