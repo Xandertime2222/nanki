@@ -1097,7 +1097,7 @@ const selectInspectorPanel = (panel) => {
     section.classList.toggle('active', section.id === `${panel}-panel`);
   });
   if (panel === 'coverage') {
-    loadCoverage().catch((error) => showToast(error.message, 'error'));
+    loadCoverage({ quiet: true }).catch((error) => showToast(error.message, 'error'));
   }
 };
 
