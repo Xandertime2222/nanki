@@ -26,13 +26,14 @@ const state = {
   selection: null,
   selectionToken: 0,
   quickCard: {
-    open: false,
+    open: true,
     front: '',
     back: '',
     sourceExcerpt: '',
     sourceLocator: '',
     anchor: null,
   },
+  hasSeenTour: false,
   drawer: {
     open: false,
     editingId: null,
@@ -91,6 +92,23 @@ const I18N = {
     'editor.clearFormatting': 'Clear',
     'editor.storageHint': 'Stored as Markdown in the background',
     'editor.shortcutHint': 'Use # for headings, - for lists, > for quotes, and Ctrl/Cmd+B for bold.',
+    'tour.title': 'Welcome to Nanki!',
+    'tour.welcome': 'Let\'s get you started with the key features.',
+    'tour.step1.title': 'Editor',
+    'tour.step1.text': 'Write your notes here using Markdown. Use # for headings, - for lists, and > for quotes.',
+    'tour.step2.title': 'Fast Card Creation',
+    'tour.step2.text': 'Select text and press Ctrl/Cmd+1 to add to front, Ctrl/Cmd+2 to add to back. The quick card dock is always visible for fast creation.',
+    'tour.step3.title': 'Save Cards',
+    'tour.step3.text': 'Press Ctrl/Cmd+Enter to save the card, or Shift+Ctrl/Cmd+Enter to save and push to Anki.',
+    'tour.step4.title': 'Coverage Analysis',
+    'tour.step4.text': 'See which parts of your notes are covered by flashcards. Click "Refresh" to analyze.',
+    'tour.step5.title': 'AI Assistant',
+    'tour.step5.text': 'Generate cards automatically with AI. Enable it in settings and configure your preferred model.',
+    'tour.start': 'Start Tour',
+    'tour.next': 'Next',
+    'tour.back': 'Back',
+    'tour.finish': 'Finish',
+    'tour.skip': 'Skip',
     'editor.emptyLabel': 'Blank note',
     'editor.emptyTitle': 'Start with your own thoughts',
     'editor.emptySubtitle': 'Type directly. Nanki saves Markdown in the background and lets you import files later.',
@@ -312,6 +330,23 @@ const I18N = {
     'editor.clearFormatting': 'Zurücksetzen',
     'editor.storageHint': 'Wird im Hintergrund als Markdown gespeichert',
     'editor.shortcutHint': 'Nutze # für Überschriften, - für Listen, > für Zitate und Strg/Cmd+B für Fett.',
+    'tour.title': 'Willkommen bei Nanki!',
+    'tour.welcome': 'Hier sind die wichtigsten Funktionen.',
+    'tour.step1.title': 'Editor',
+    'tour.step1.text': 'Schreibe hier deine Notizen mit Markdown. Nutze # für Überschriften, - für Listen und > für Zitate.',
+    'tour.step2.title': 'Schnelle Kartenerstellung',
+    'tour.step2.text': 'Text auswählen und Strg/Cmd+1 für Vorderseite, Strg/Cmd+2 für Rückseite drücken. Die Schnellkarten-Leiste ist immer sichtbar.',
+    'tour.step3.title': 'Karten speichern',
+    'tour.step3.text': 'Strg/Cmd+Enter zum Speichern, oder Shift+Strg/Cmd+Enter zum Speichern und an Anki senden.',
+    'tour.step4.title': 'Coverage-Analyse',
+    'tour.step4.text': 'Sieh welche Teile deiner Notizen durch Karten abgedeckt sind. Klicke "Aktualisieren" zur Analyse.',
+    'tour.step5.title': 'KI-Assistent',
+    'tour.step5.text': 'Erstelle automatisch Karten mit KI. Aktiviere es in den Einstellungen und wähle dein Modell.',
+    'tour.start': 'Tour starten',
+    'tour.next': 'Weiter',
+    'tour.back': 'Zurück',
+    'tour.finish': 'Fertig',
+    'tour.skip': 'Überspringen',
     'editor.emptyLabel': 'Leere Notiz',
     'editor.emptyTitle': 'Starte mit deinen eigenen Gedanken',
     'editor.emptySubtitle': 'Schreibe direkt los. Nanki speichert im Hintergrund als Markdown und lässt dich später Dateien importieren.',
@@ -765,9 +800,9 @@ const resetQuickCard = ({ quiet = false } = {}) => {
 
 const renderQuickCardDock = () => {
   if (!els.quickCardDock || !els.editorShell) return;
-  const open = Boolean(state.quickCard.open);
-  els.quickCardDock.classList.toggle('hidden', !open);
-  els.editorShell.classList.toggle('has-quick-card', open);
+  state.quickCard.open = true; // Always visible
+  els.quickCardDock.classList.remove('hidden');
+  els.editorShell.classList.add('has-quick-card');
   if (els.quickCardFront && els.quickCardFront.value !== state.quickCard.front) {
     els.quickCardFront.value = state.quickCard.front;
   }
@@ -797,6 +832,42 @@ const syncQuickCardFromInputs = () => {
   renderQuickCardDock();
 };
 
+const fillQuickCardFromSelection = (side) => {
+  const selection = state.selection;
+  if (!selection?.text) {
+    showToast(t('errors.selectTextFirst'), 'error');
+    return false;
+  }
+  if (!state.activeNoteId) {
+    showToast(t('errors.createOrOpenNoteFirst'), 'error');
+    return false;
+  }
+  state.quickCard.open = true;
+  if (side === 'front') {
+    state.quickCard.front = state.quickCard.front.trim() ? `${state.quickCard.front.trim()}\n${selection.text}` : selection.text;
+    state.quickCard.sourceExcerpt = selection.text;
+    state.quickCard.sourceLocator = selection.locator || state.quickCard.sourceLocator;
+    state.quickCard.anchor = cloneAnchor(selection.anchor);
+    showToast(t('toast.frontCaptured'));
+  } else if (side === 'back') {
+    state.quickCard.back = state.quickCard.back.trim() ? `${state.quickCard.back.trim()}\n${selection.text}` : selection.text;
+    if (!state.quickCard.sourceExcerpt) {
+      state.quickCard.sourceExcerpt = selection.text;
+      state.quickCard.sourceLocator = selection.locator || state.quickCard.sourceLocator;
+      state.quickCard.anchor = cloneAnchor(selection.anchor);
+    }
+    showToast(t('toast.backCaptured'));
+  }
+  renderQuickCardDock();
+  hideSelectionBubble();
+  try {
+    window.getSelection()?.removeAllRanges();
+  } catch {
+    // ignore
+  }
+  return true;
+};
+
 const appendSelectionToQuickCard = (side) => {
   const selection = state.selection;
   if (!selection?.text) {
@@ -809,15 +880,13 @@ const appendSelectionToQuickCard = (side) => {
   }
   state.quickCard.open = true;
   if (side === 'front') {
-    state.quickCard.front = state.quickCard.front.trim() ? `${state.quickCard.front.trim()}
-${selection.text}` : selection.text;
+    state.quickCard.front = state.quickCard.front.trim() ? `${state.quickCard.front.trim()}\n${selection.text}` : selection.text;
     state.quickCard.sourceExcerpt = selection.text;
     state.quickCard.sourceLocator = selection.locator || state.quickCard.sourceLocator;
     state.quickCard.anchor = cloneAnchor(selection.anchor);
     showToast(t('toast.frontCaptured'));
   } else {
-    state.quickCard.back = state.quickCard.back.trim() ? `${state.quickCard.back.trim()}
-${selection.text}` : selection.text;
+    state.quickCard.back = state.quickCard.back.trim() ? `${state.quickCard.back.trim()}\n${selection.text}` : selection.text;
     if (!state.quickCard.sourceExcerpt) {
       state.quickCard.sourceExcerpt = selection.text;
       state.quickCard.sourceLocator = selection.locator || state.quickCard.sourceLocator;
@@ -1893,6 +1962,132 @@ const loadNotes = async () => {
 };
 
 // Keyboard shortcuts
+let tourStep = 0;
+let tourOverlay = null;
+
+const showTourOverlay = (step) => {
+  const steps = [
+    {
+      target: '#note-editor',
+      title: t('tour.step1.title'),
+      text: t('tour.step1.text'),
+    },
+    {
+      target: '#quick-card-dock',
+      title: t('tour.step2.title'),
+      text: t('tour.step2.text'),
+    },
+    {
+      target: '#quick-card-save-btn',
+      title: t('tour.step3.title'),
+      text: t('tour.step3.text'),
+    },
+    {
+      target: '#refresh-coverage-btn',
+      title: t('tour.step4.title'),
+      text: t('tour.step4.text'),
+    },
+    {
+      target: '#open-ai-btn',
+      title: t('tour.step5.title'),
+      text: t('tour.step5.text'),
+    },
+  ];
+  
+  if (step < 0 || step >= steps.length) {
+    finishTour();
+    return;
+  }
+  
+  const targetEl = document.querySelector(steps[step].target);
+  if (!targetEl) {
+    finishTour();
+    return;
+  }
+  
+  if (!tourOverlay) {
+    tourOverlay = document.createElement('div');
+    tourOverlay.className = 'tour-overlay';
+    tourOverlay.innerHTML = `
+      <div class="tour-modal">
+        <div class="tour-header">
+          <h3 class="tour-title"></h3>
+        </div>
+        <div class="tour-body"></div>
+        <div class="tour-footer">
+          <button class="ghost tour-skip"></button>
+          <div class="tour-actions">
+            <button class="ghost tour-back"></button>
+            <button class="primary tour-next"></button>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(tourOverlay);
+    
+    tourOverlay.querySelector('.tour-skip').addEventListener('click', finishTour);
+    tourOverlay.querySelector('.tour-back').addEventListener('click', () => showTourOverlay(tourStep - 1));
+    tourOverlay.querySelector('.tour-next').addEventListener('click', () => showTourOverlay(tourStep + 1));
+  }
+  
+  const rect = targetEl.getBoundingClientRect();
+  const modal = tourOverlay.querySelector('.tour-modal');
+  const title = tourOverlay.querySelector('.tour-title');
+  const body = tourOverlay.querySelector('.tour-body');
+  const backBtn = tourOverlay.querySelector('.tour-back');
+  const nextBtn = tourOverlay.querySelector('.tour-next');
+  
+  title.textContent = steps[step].title;
+  body.textContent = steps[step].text;
+  backBtn.textContent = t('tour.back');
+  nextBtn.textContent = step === steps.length - 1 ? t('tour.finish') : t('tour.next');
+  backBtn.style.visibility = step === 0 ? 'hidden' : 'visible';
+  
+  // Position modal near target
+  const modalRect = modal.getBoundingClientRect();
+  let top = rect.bottom + 10;
+  let left = rect.left;
+  
+  if (top + modalRect.height > window.innerHeight) {
+    top = rect.top - modalRect.height - 10;
+  }
+  if (left + modalRect.width > window.innerWidth) {
+    left = window.innerWidth - modalRect.width - 20;
+  }
+  
+  modal.style.position = 'fixed';
+  modal.style.top = `${Math.max(20, top)}px`;
+  modal.style.left = `${Math.max(20, left)}px`;
+  modal.style.zIndex = '10001';
+  
+  tourOverlay.style.display = 'block';
+  tourOverlay.style.position = 'fixed';
+  tourOverlay.style.top = '0';
+  tourOverlay.style.left = '0';
+  tourOverlay.style.right = '0';
+  tourOverlay.style.bottom = '0';
+  tourOverlay.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+  tourOverlay.style.zIndex = '10000';
+};
+
+const finishTour = () => {
+  if (tourOverlay) {
+    tourOverlay.remove();
+    tourOverlay = null;
+  }
+  state.hasSeenTour = true;
+  try {
+    localStorage.setItem('nanki_has_seen_tour', 'true');
+  } catch {
+    // ignore
+  }
+};
+
+const startTour = () => {
+  tourStep = 0;
+  showTourOverlay(0);
+};
+
 const setupKeyboardShortcuts = () => {
   if (!state.keyboardShortcutsEnabled) return;
   
@@ -1935,10 +2130,22 @@ const setupKeyboardShortcuts = () => {
           event.preventDefault();
           document.execCommand('italic', false, null);
           break;
+        case '1':
+          event.preventDefault();
+          fillQuickCardFromSelection('front');
+          break;
+        case '2':
+          event.preventDefault();
+          fillQuickCardFromSelection('back');
+          break;
       }
     }
     
     if (event.key === 'Escape') {
+      if (tourOverlay) {
+        finishTour();
+        return;
+      }
       // Close any open modals/drawers
       document.querySelectorAll('.overlay:not(.hidden)').forEach((overlay) => {
         overlay.classList.add('hidden');
