@@ -1,5 +1,6 @@
 const state = {
   settings: null,
+  theme: 'auto',
   notes: [],
   activeNoteId: null,
   activeNote: null,
@@ -9,6 +10,9 @@ const state = {
   saveTimer: null,
   dirty: false,
   coverageReport: null,
+  coverageStale: false,
+  coverageLoading: false,
+  coverageRefreshTimer: null,
   coverageView: false,
   ankiConnectionInfo: null,
   inspectorPanel: 'cards',
@@ -69,6 +73,10 @@ const I18N = {
     'topbar.noteDetails': 'Details',
     'topbar.studyTools': 'Study',
     'topbar.pushAll': 'Push note cards to Anki',
+    'topbar.themeAuto': 'Theme: Auto (system)',
+    'topbar.themeLight': 'Theme: Light',
+    'topbar.themeDark': 'Theme: Dark',
+    'coverage.staleHint': 'Outdated — click Refresh to recalculate.',
     'editor.bold': 'Bold',
     'editor.italic': 'Italic',
     'editor.h1': 'H1',
@@ -283,6 +291,10 @@ const I18N = {
     'topbar.noteDetails': 'Details',
     'topbar.studyTools': 'Lernen',
     'topbar.pushAll': 'Notizkarten zu Anki senden',
+    'topbar.themeAuto': 'Design: Automatisch (System)',
+    'topbar.themeLight': 'Design: Hell',
+    'topbar.themeDark': 'Design: Dunkel',
+    'coverage.staleHint': 'Veraltet — auf Aktualisieren klicken, um neu zu berechnen.',
     'editor.bold': 'Fett',
     'editor.italic': 'Kursiv',
     'editor.h1': 'H1',
@@ -798,12 +810,16 @@ const toggleCoverageView = async () => {
     return;
   }
   if (!state.coverageView) {
-    await loadCoverage({ quiet: true });
     state.coverageView = true;
+    renderEditorCoverageView();
+    // Lazy-load: only fetch if we don't have a fresh report
+    if (state.coverageStale || !state.coverageReport) {
+      await loadCoverage({ quiet: true });
+    }
   } else {
     state.coverageView = false;
+    renderEditorCoverageView();
   }
-  renderEditorCoverageView();
 };
 
 const applyWorkspaceChrome = () => {
@@ -848,6 +864,48 @@ const toggleNoteDetails = () => {
   applyWorkspaceChrome();
 };
 
+const THEME_STORAGE_KEY = 'nanki.theme';
+const THEME_ORDER = ['auto', 'light', 'dark'];
+
+const getStoredTheme = () => {
+  try {
+    const value = window.localStorage.getItem(THEME_STORAGE_KEY);
+    return THEME_ORDER.includes(value) ? value : 'auto';
+  } catch {
+    return 'auto';
+  }
+};
+
+const persistTheme = (theme) => {
+  try {
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+  } catch {
+    // ignore (private mode etc.)
+  }
+};
+
+const applyTheme = (theme) => {
+  const value = THEME_ORDER.includes(theme) ? theme : 'auto';
+  state.theme = value;
+  document.documentElement.setAttribute('data-theme', value);
+  if (els.themeToggleBtn) {
+    const labelKey = value === 'auto' ? 'topbar.themeAuto' : value === 'light' ? 'topbar.themeLight' : 'topbar.themeDark';
+    const label = t(labelKey);
+    els.themeToggleBtn.setAttribute('aria-label', label);
+    els.themeToggleBtn.setAttribute('title', label);
+  }
+  if (els.themeIconAuto) els.themeIconAuto.classList.toggle('hidden', value !== 'auto');
+  if (els.themeIconLight) els.themeIconLight.classList.toggle('hidden', value !== 'light');
+  if (els.themeIconDark) els.themeIconDark.classList.toggle('hidden', value !== 'dark');
+};
+
+const cycleTheme = () => {
+  const currentIndex = THEME_ORDER.indexOf(state.theme || 'auto');
+  const next = THEME_ORDER[(currentIndex + 1) % THEME_ORDER.length];
+  applyTheme(next);
+  persistTheme(next);
+};
+
 const applyTranslations = () => {
   document.documentElement.lang = currentLanguage();
   document.querySelectorAll('[data-i18n]').forEach((node) => {
@@ -871,6 +929,7 @@ const applyTranslations = () => {
   updateEditorEmptyState();
   renderEditorCoverageView();
   applyWorkspaceChrome();
+  applyTheme(state.theme || getStoredTheme());
 };
 
 const noteListItems = () => {
@@ -1392,14 +1451,21 @@ const hydrateActiveNote = async (note, { reloadEditor = true } = {}) => {
   state.markdownSnapshot = note.content || '';
   state.markdownDirty = false;
   state.markdownPromise = null;
+  state.coverageReport = null;
+  state.coverageStale = true;
+  if (els.refreshCoverageBtn) els.refreshCoverageBtn.classList.remove('stale');
   bindNoteMetaFields(note);
   updateSourceBadge();
   if (reloadEditor) await renderEditorFromMarkdown(note.content || '');
   loadSourceViewer(note.source);
   updateNoteListEntry(note);
-  await loadCoverage({ quiet: true });
   renderCardList();
+  renderCoveragePanel();
   setSaveStatus(t('status.loaded', { date: formatTimestamp(note.meta.updated_at) }));
+  // Coverage is expensive — only fetch it if the user is actually looking at it.
+  if (state.coverageView || (state.studyOpen && state.inspectorPanel === 'coverage')) {
+    loadCoverage({ quiet: true, force: true }).catch(() => {});
+  }
 };
 
 const serializeEditorToMarkdown = async () => {
@@ -1443,9 +1509,8 @@ const persistActiveNote = async ({ quiet = false } = {}) => {
   state.markdownDirty = false;
   updateNoteListEntry(state.activeNote);
   setSaveStatus(t('status.loaded', { date: formatTimestamp(saved.meta.updated_at) }));
-  if (state.inspectorPanel === 'coverage' && saved.cards.length) {
-    await loadCoverage({ quiet: true });
-  }
+  // Text content changed — coverage is now stale. Refresh lazily.
+  if (saved.cards.length) markCoverageStale();
   return state.activeNote;
 };
 
@@ -1668,20 +1733,48 @@ const refreshAnkiDecks = async ({ quiet = false } = {}) => {
   if (!quiet) showToast(t('toast.deckListRefreshed'));
 };
 
-const loadCoverage = async ({ quiet = false } = {}) => {
+const loadCoverage = async ({ quiet = false, force = false } = {}) => {
   if (!state.activeNoteId) {
     state.coverageReport = null;
+    state.coverageStale = false;
     renderCoveragePanel();
     return null;
   }
-  const report = await fetchJson(`/api/notes/${state.activeNoteId}/coverage`);
-  state.coverageReport = report;
-  renderCoveragePanel();
-  renderCardList();
-  if (!quiet && state.inspectorPanel === 'coverage') {
-    // no toast needed, just keep panel current
+  if (state.coverageLoading) return state.coverageReport;
+  if (!force && state.coverageReport && !state.coverageStale) return state.coverageReport;
+  state.coverageLoading = true;
+  if (els.refreshCoverageBtn) els.refreshCoverageBtn.classList.add('loading');
+  try {
+    const report = await fetchJson(`/api/notes/${state.activeNoteId}/coverage`);
+    state.coverageReport = report;
+    state.coverageStale = false;
+    if (els.refreshCoverageBtn) els.refreshCoverageBtn.classList.remove('stale');
+    renderCoveragePanel();
+    renderCardList();
+    if (state.coverageView) renderEditorCoverageView();
+    return report;
+  } finally {
+    state.coverageLoading = false;
+    if (els.refreshCoverageBtn) els.refreshCoverageBtn.classList.remove('loading');
   }
-  return report;
+};
+
+const markCoverageStale = () => {
+  state.coverageStale = true;
+  if (state.coverageRefreshTimer) {
+    window.clearTimeout(state.coverageRefreshTimer);
+  }
+  // Reflect stale state in the UI immediately.
+  if (els.refreshCoverageBtn) {
+    els.refreshCoverageBtn.classList.add('stale');
+  }
+  // Refresh in the background only if the user is actively viewing coverage.
+  const viewingCoverage = state.coverageView || (state.studyOpen && state.inspectorPanel === 'coverage');
+  if (viewingCoverage) {
+    state.coverageRefreshTimer = window.setTimeout(() => {
+      loadCoverage({ quiet: true, force: true }).catch(() => {});
+    }, 600);
+  }
 };
 
 const cloneAnchor = (anchor) => (anchor ? JSON.parse(JSON.stringify(anchor)) : null);
@@ -1858,7 +1951,15 @@ const saveCardPayload = async (payload, cardId = null) => {
   const url = cardId ? `/api/notes/${state.activeNoteId}/cards/${cardId}` : `/api/notes/${state.activeNoteId}/cards`;
   const method = cardId ? 'PUT' : 'POST';
   const saved = await fetchJson(url, { method, body: JSON.stringify(payload) });
-  await fetchActiveNote({ reloadEditor: false });
+  if (state.activeNote) {
+    state.activeNote.cards = state.activeNote.cards || [];
+    const idx = state.activeNote.cards.findIndex((c) => c.id === saved.id);
+    if (idx >= 0) state.activeNote.cards[idx] = saved;
+    else state.activeNote.cards.push(saved);
+    updateNoteListEntry(state.activeNote);
+    renderCardList();
+    markCoverageStale();
+  }
   return saved;
 };
 
@@ -1876,9 +1977,13 @@ const saveDrawerCard = async ({ pushAfterSave = false } = {}) => {
 };
 
 const deleteCard = async (cardId) => {
-  if (!window.confirm(t('dialogs.deleteCardConfirm'))) return;
   await fetchJson(`/api/notes/${state.activeNoteId}/cards/${cardId}`, { method: 'DELETE' });
-  await fetchActiveNote({ reloadEditor: false });
+  if (state.activeNote?.cards) {
+    state.activeNote.cards = state.activeNote.cards.filter((c) => c.id !== cardId);
+    updateNoteListEntry(state.activeNote);
+    renderCardList();
+    markCoverageStale();
+  }
   showToast(t('toast.cardDeleted'));
 };
 
@@ -1900,7 +2005,14 @@ const pushCards = async (cardIds = null) => {
     method: 'POST',
     body: JSON.stringify({ card_ids: cardIds, sync_after_push: Boolean(state.settings?.auto_sync) }),
   });
-  await fetchActiveNote({ reloadEditor: false });
+  if (result.pushed?.length && state.activeNote?.cards) {
+    const pushedAt = new Date().toISOString();
+    const pushedSet = new Set(result.pushed.map((item) => item.card_id));
+    state.activeNote.cards = state.activeNote.cards.map((card) => (
+      pushedSet.has(card.id) ? { ...card, last_pushed_at: pushedAt } : card
+    ));
+    renderCardList();
+  }
   if (result.pushed?.length) showToast(t('toast.pushedCards', { count: result.pushed.length }));
   else showToast(result.skipped?.[0]?.reason || t('toast.noCardsPushed'), 'error');
 };
@@ -2288,7 +2400,7 @@ const bindEvents = () => {
   els.toggleCoverageViewBtn.addEventListener('click', () => toggleCoverageView().catch((error) => showToast(error.message, 'error')));
 
   els.pushAllBtn.addEventListener('click', () => pushCards().catch((error) => showToast(error.message, 'error')));
-  els.refreshCoverageBtn.addEventListener('click', () => loadCoverage().catch((error) => showToast(error.message, 'error')));
+  els.refreshCoverageBtn.addEventListener('click', () => loadCoverage({ force: true }).catch((error) => showToast(error.message, 'error')));
 
   els.newCardBtn.addEventListener('click', openBlankCardDrawer);
   els.drawerCloseBtn.addEventListener('click', () => closeDrawer({ reset: true }));
@@ -2314,6 +2426,7 @@ const bindEvents = () => {
   els.bubbleBackBtn.addEventListener('click', () => fillDrawerFromSelection('back'));
 
   els.openSettingsBtn.addEventListener('click', openSettingsModal);
+  if (els.themeToggleBtn) els.themeToggleBtn.addEventListener('click', cycleTheme);
   els.settingsCloseBtn.addEventListener('click', closeSettingsModal);
   els.saveSettingsBtn.addEventListener('click', () => saveSettings().catch((error) => showToast(error.message, 'error')));
   els.settingsLanguage.addEventListener('change', () => {
@@ -2374,6 +2487,10 @@ const mapElements = () => {
     toggleStudyBtn: document.getElementById('toggle-study-btn'),
     closeStudyBtn: document.getElementById('close-study-btn'),
     openSettingsBtn: document.getElementById('open-settings-btn'),
+    themeToggleBtn: document.getElementById('theme-toggle-btn'),
+    themeIconAuto: document.getElementById('theme-icon-auto'),
+    themeIconLight: document.getElementById('theme-icon-light'),
+    themeIconDark: document.getElementById('theme-icon-dark'),
     pushAllBtn: document.getElementById('push-all-btn'),
     saveStatus: document.getElementById('save-status'),
     editorStats: document.getElementById('editor-stats'),
@@ -2460,6 +2577,7 @@ const mapElements = () => {
 
 const init = async () => {
   mapElements();
+  applyTheme(getStoredTheme());
   bindEvents();
   resetDrawer();
   resetQuickCard({ quiet: true });
