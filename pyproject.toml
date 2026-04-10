@@ -38,6 +38,7 @@ dev = [
 [project.scripts]
 nanki = "noteforge_anki_studio.__main__:main"
 noteforge-anki-studio = "noteforge_anki_studio.__main__:main"
+nanki-standalone = "standalone:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
