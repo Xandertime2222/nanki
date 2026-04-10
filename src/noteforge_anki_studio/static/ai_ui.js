@@ -74,6 +74,7 @@
       'ai.useAnkiCoverage': 'Use semantic coverage context from all scanned Anki cards for card generation',
       'ai.availableModels': 'Available models',
       'ai.noneLoaded': 'No models loaded yet.',
+      'ai.selectModel': 'Select a model...',
       'ai.testConnection': 'Test AI connection',
       'ai.refreshModels': 'Refresh models',
       'ai.connectionOk': 'AI connection successful',
@@ -155,6 +156,7 @@
       'ai.useAnkiCoverage': 'Semantischen Coverage-Kontext aus allen gescannten Anki-Karten für die Kartenerstellung verwenden',
       'ai.availableModels': 'Verfügbare Modelle',
       'ai.noneLoaded': 'Noch keine Modelle geladen.',
+      'ai.selectModel': 'Modell auswählen...',
       'ai.testConnection': 'KI-Verbindung testen',
       'ai.refreshModels': 'Modelle aktualisieren',
       'ai.connectionOk': 'KI-Verbindung erfolgreich',
@@ -309,23 +311,23 @@
             </label>
             <label class="wide">
               <span data-ai-i18n="ai.defaultModel"></span>
-              <input id="ai-default-model" type="text" list="ai-model-options" />
+              <select id="ai-default-model"></select>
             </label>
             <label>
               <span data-ai-i18n="ai.chatModel"></span>
-              <input id="ai-chat-model" type="text" list="ai-model-options" />
+              <select id="ai-chat-model"></select>
             </label>
             <label>
               <span data-ai-i18n="ai.explainModel"></span>
-              <input id="ai-explain-model" type="text" list="ai-model-options" />
+              <select id="ai-explain-model"></select>
             </label>
             <label>
               <span data-ai-i18n="ai.flashcardModel"></span>
-              <input id="ai-flashcard-model" type="text" list="ai-model-options" />
+              <select id="ai-flashcard-model"></select>
             </label>
             <label>
               <span data-ai-i18n="ai.autoFlashcardModel"></span>
-              <input id="ai-auto-flashcard-model" type="text" list="ai-model-options" />
+              <select id="ai-auto-flashcard-model"></select>
             </label>
             <label class="checkbox-row wide">
               <input id="ai-chat-note-only" type="checkbox" />
@@ -368,7 +370,6 @@
             <div class="section-label" data-ai-i18n="ai.availableModels"></div>
             <div id="ai-model-list" class="settings-chip-list"></div>
           </div>
-          <datalist id="ai-model-options"></datalist>
         </section>
       `);
     }
@@ -542,7 +543,6 @@
       aiStatusText: document.getElementById('ai-status-text'),
       aiStatusMeta: document.getElementById('ai-status-meta'),
       aiModelList: document.getElementById('ai-model-list'),
-      aiModelOptions: document.getElementById('ai-model-options'),
       aiModal: document.getElementById('ai-modal'),
       aiCloseBtn: document.getElementById('ai-close-btn'),
       aiContextPill: document.getElementById('ai-context-pill'),
@@ -662,11 +662,26 @@
   }
 
   function refreshModelInputs() {
-    if (!aiEls.aiModelOptions) return;
-    aiEls.aiModelOptions.innerHTML = uiState.modelOptions.map((item) => `<option value="${escapeHtml(item.id)}"></option>`).join('');
-    aiEls.aiModelList.innerHTML = uiState.modelOptions.length
-      ? uiState.modelOptions.map((item) => `<span class="pill">${escapeHtml(item.name || item.id)}</span>`).join('')
-      : `<span class="muted">${escapeHtml(lt('ai.noneLoaded'))}</span>`;
+    const modelOptions = uiState.modelOptions || [];
+    const optionsHtml = modelOptions.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name || item.id)}</option>`).join('');
+    
+    const selects = ['ai-default-model', 'ai-chat-model', 'ai-explain-model', 'ai-flashcard-model', 'ai-auto-flashcard-model'];
+    selects.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) {
+        const current = el.value;
+        el.innerHTML = `<option value="">${lt('ai.selectModel')}</option>${optionsHtml}`;
+        if (current && modelOptions.some(m => m.id === current)) {
+          el.value = current;
+        }
+      }
+    });
+    
+    if (aiEls.aiModelList) {
+      aiEls.aiModelList.innerHTML = modelOptions.length
+        ? modelOptions.map((item) => `<span class="pill">${escapeHtml(item.name || item.id)}</span>`).join('')
+        : `<span class="muted">${escapeHtml(lt('ai.noneLoaded'))}</span>`;
+    }
   }
 
   function renderAiSettingsStatus() {
