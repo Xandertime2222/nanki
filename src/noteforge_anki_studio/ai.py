@@ -47,7 +47,9 @@ class ProviderConfig:
 
 
 class AIService:
-    def __init__(self, settings_manager: SettingsManager, anki_client: AnkiConnectClient) -> None:
+    def __init__(
+        self, settings_manager: SettingsManager, anki_client: AnkiConnectClient
+    ) -> None:
         self.settings_manager = settings_manager
         self.anki_client = anki_client
 
@@ -57,10 +59,15 @@ class AIService:
     def _provider_config(self, settings: AppSettings) -> ProviderConfig:
         ai = settings.ai
         if ai.provider == "ollama_local":
-            base_url = self._normalize_base_url(ai.ollama_local_url) or "http://127.0.0.1:11434"
+            base_url = (
+                self._normalize_base_url(ai.ollama_local_url)
+                or "http://127.0.0.1:11434"
+            )
             return ProviderConfig(provider=ai.provider, base_url=base_url, headers={})
         if ai.provider == "ollama_cloud":
-            base_url = self._normalize_base_url(ai.ollama_cloud_url) or "https://ollama.com"
+            base_url = (
+                self._normalize_base_url(ai.ollama_cloud_url) or "https://ollama.com"
+            )
             if not ai.ollama_cloud_api_key.strip():
                 raise AIConfigurationError("Ollama Cloud API key is missing.")
             return ProviderConfig(
@@ -69,7 +76,10 @@ class AIService:
                 headers={"Authorization": f"Bearer {ai.ollama_cloud_api_key.strip()}"},
             )
         if ai.provider == "openrouter":
-            base_url = self._normalize_base_url(ai.openrouter_url) or "https://openrouter.ai/api/v1"
+            base_url = (
+                self._normalize_base_url(ai.openrouter_url)
+                or "https://openrouter.ai/api/v1"
+            )
             if not ai.openrouter_api_key.strip():
                 raise AIConfigurationError("OpenRouter API key is missing.")
             return ProviderConfig(
@@ -92,14 +102,23 @@ class AIService:
         json_body: dict[str, Any] | None = None,
         timeout: float = 240.0,
     ) -> Any:
-        timeout_config = httpx.Timeout(timeout, connect=min(timeout, 15.0), write=min(timeout, 60.0), pool=min(timeout, 60.0))
+        timeout_config = httpx.Timeout(
+            timeout,
+            connect=min(timeout, 15.0),
+            write=min(timeout, 60.0),
+            pool=min(timeout, 60.0),
+        )
         try:
             async with httpx.AsyncClient(timeout=timeout_config) as client:
-                response = await client.request(method, url, headers=headers, json=json_body)
+                response = await client.request(
+                    method, url, headers=headers, json=json_body
+                )
                 response.raise_for_status()
         except httpx.HTTPStatusError as exc:
             detail = exc.response.text.strip()
-            raise AIServiceError(f"AI request failed with HTTP {exc.response.status_code}: {detail}") from exc
+            raise AIServiceError(
+                f"AI request failed with HTTP {exc.response.status_code}: {detail}"
+            ) from exc
         except httpx.HTTPError as exc:
             raise AIServiceError(f"AI request failed: {exc}") from exc
         try:
@@ -107,7 +126,12 @@ class AIService:
         except ValueError as exc:
             raise AIServiceError("AI provider returned invalid JSON.") from exc
 
-    def resolve_model(self, settings: AppSettings, task: str, available_models: Iterable[AIModelInfo] | None = None) -> str:
+    def resolve_model(
+        self,
+        settings: AppSettings,
+        task: str,
+        available_models: Iterable[AIModelInfo] | None = None,
+    ) -> str:
         ai = settings.ai
         task_lookup = {
             "chat": ai.chat_model,
@@ -135,25 +159,38 @@ class AIService:
         settings = settings or self.settings_manager.load()
         config = self._provider_config(settings)
         if config.provider in {"ollama_local", "ollama_cloud"}:
-            raw = await self._request_json("GET", f"{config.base_url}/api/tags", headers=config.headers, timeout=30.0)
+            raw = await self._request_json(
+                "GET",
+                f"{config.base_url}/api/tags",
+                headers=config.headers,
+                timeout=30.0,
+            )
             models = [
                 AIModelInfo(
                     id=str(item.get("model") or item.get("name") or "").strip(),
                     name=str(item.get("name") or item.get("model") or "").strip(),
                     provider=config.provider,
-                    description=str(((item.get("details") or {}).get("family") or "")).strip(),
+                    description=str(
+                        ((item.get("details") or {}).get("family") or "")
+                    ).strip(),
                 )
                 for item in raw.get("models", [])
                 if str(item.get("model") or item.get("name") or "").strip()
             ]
         else:
-            raw = await self._request_json("GET", f"{config.base_url}/models", headers=config.headers, timeout=45.0)
+            raw = await self._request_json(
+                "GET", f"{config.base_url}/models", headers=config.headers, timeout=45.0
+            )
             models = [
                 AIModelInfo(
                     id=str(item.get("id") or "").strip(),
                     name=str(item.get("name") or item.get("id") or "").strip(),
                     provider=config.provider,
-                    context_length=(item.get("context_length") if isinstance(item.get("context_length"), int) else None),
+                    context_length=(
+                        item.get("context_length")
+                        if isinstance(item.get("context_length"), int)
+                        else None
+                    ),
                     description=str(item.get("description") or "").strip(),
                 )
                 for item in raw.get("data", [])
@@ -167,13 +204,17 @@ class AIService:
             "count": len(models),
         }
 
-    async def test_connection(self, settings: AppSettings | None = None) -> dict[str, Any]:
+    async def test_connection(
+        self, settings: AppSettings | None = None
+    ) -> dict[str, Any]:
         settings = settings or self.settings_manager.load()
         listed = await self.list_models(settings)
         models = [AIModelInfo.model_validate(item) for item in listed["models"]]
         return {
             **listed,
-            "default_model": self.resolve_model(settings, "chat", models) if models or settings.ai.default_model else "",
+            "default_model": self.resolve_model(settings, "chat", models)
+            if models or settings.ai.default_model
+            else "",
             "ok": True,
         }
 
@@ -191,10 +232,15 @@ class AIService:
         if not model:
             try:
                 available_models = await self.list_models(settings)
-                available = [AIModelInfo.model_validate(item) for item in available_models["models"]]
+                available = [
+                    AIModelInfo.model_validate(item)
+                    for item in available_models["models"]
+                ]
             except Exception:
                 available = None
-        selected_model = (model or self.resolve_model(settings, task, available)).strip()
+        selected_model = (
+            model or self.resolve_model(settings, task, available)
+        ).strip()
         if config.provider in {"ollama_local", "ollama_cloud"}:
             payload = {
                 "model": selected_model,
@@ -224,7 +270,14 @@ class AIService:
                 timeout=self._completion_timeout(task),
             )
             choices = raw.get("choices") or []
-            content = str((((choices[0] if choices else {}).get("message") or {}).get("content") or "")).strip()
+            content = str(
+                (
+                    ((choices[0] if choices else {}).get("message") or {}).get(
+                        "content"
+                    )
+                    or ""
+                )
+            ).strip()
         if not content:
             raise AIServiceError("AI provider returned an empty response.")
         return content, selected_model, config.provider
@@ -277,7 +330,12 @@ class AIService:
         )
         assembled = [{"role": "system", "content": system_prompt}]
         if context_message:
-            assembled.append({"role": "user", "content": f"Use the following context for the conversation:\n\n{context_message}"})
+            assembled.append(
+                {
+                    "role": "user",
+                    "content": f"Use the following context for the conversation:\n\n{context_message}",
+                }
+            )
         assembled.extend(messages)
         content, selected_model, provider = await self._chat_completion(
             settings,
@@ -344,14 +402,18 @@ class AIService:
             "keywords": keywords,
         }
 
-    def _semantic_overlap_score(self, source_keywords: set[str], signature: dict[str, Any]) -> float:
+    def _semantic_overlap_score(
+        self, source_keywords: set[str], signature: dict[str, Any]
+    ) -> float:
         keywords = set(signature.get("keywords") or [])
         if not source_keywords or not keywords:
             return 0.0
         overlap = source_keywords & keywords
         if not overlap:
             return 0.0
-        return (len(overlap) / max(1, len(keywords))) + (len(overlap) / max(1, len(source_keywords)))
+        return (len(overlap) / max(1, len(keywords))) + (
+            len(overlap) / max(1, len(source_keywords))
+        )
 
     async def _build_semantic_coverage_context(
         self,
@@ -373,11 +435,15 @@ class AIService:
         ranked: list[tuple[float, dict[str, Any]]] = []
         for card in anki_cards:
             signature = self._card_signature(card)
-            ranked.append((self._semantic_overlap_score(source_keywords, signature), signature))
+            ranked.append(
+                (self._semantic_overlap_score(source_keywords, signature), signature)
+            )
         ranked.sort(key=lambda item: item[0], reverse=True)
         relevant = [signature for score, signature in ranked if score > 0][:80]
         if not relevant:
-            relevant = [signature for _, signature in ranked[:40] if signature.get("keywords")]
+            relevant = [
+                signature for _, signature in ranked[:40] if signature.get("keywords")
+            ]
 
         covered_keywords: list[str] = []
         seen: set[str] = set()
@@ -421,7 +487,11 @@ class AIService:
         fence_match = CODE_FENCE_PATTERN.search(cleaned)
         if fence_match:
             cleaned = fence_match.group(1).strip()
-        for candidate in (cleaned, self._slice_brackets(cleaned, "{", "}"), self._slice_brackets(cleaned, "[", "]")):
+        for candidate in (
+            cleaned,
+            self._slice_brackets(cleaned, "{", "}"),
+            self._slice_brackets(cleaned, "[", "]"),
+        ):
             if not candidate:
                 continue
             repaired_candidates = [candidate]
@@ -443,13 +513,19 @@ class AIService:
             return ""
         return text[start : end + 1]
 
-    def _normalize_generated_cards(self, raw: Any, *, source_text: str = "") -> list[AIGeneratedCard]:
+    def _normalize_generated_cards(
+        self, raw: Any, *, source_text: str = ""
+    ) -> list[AIGeneratedCard]:
         if isinstance(raw, dict):
             candidate_items = raw.get("cards", [])
         else:
             candidate_items = raw
         cards: list[AIGeneratedCard] = []
-        fallback_excerpt = best_excerpt_for_candidates(source_text, [source_text[:220]]) if source_text.strip() else ""
+        fallback_excerpt = (
+            best_excerpt_for_candidates(source_text, [source_text[:220]])
+            if source_text.strip()
+            else ""
+        )
         for item in candidate_items or []:
             if not isinstance(item, dict):
                 continue
@@ -459,15 +535,25 @@ class AIService:
             front = str(item.get("front") or item.get("question") or "").strip()
             back = str(item.get("back") or item.get("answer") or "").strip()
             extra = str(item.get("extra") or item.get("context") or "").strip()
-            source_excerpt = str(item.get("source_excerpt") or item.get("excerpt") or "").strip()
+            source_excerpt = str(
+                item.get("source_excerpt") or item.get("excerpt") or ""
+            ).strip()
             raw_tags = item.get("tags") or []
-            tags = [str(tag).strip() for tag in raw_tags if str(tag).strip()] if isinstance(raw_tags, list) else []
+            tags = (
+                [str(tag).strip() for tag in raw_tags if str(tag).strip()]
+                if isinstance(raw_tags, list)
+                else []
+            )
             if not front:
                 continue
             if card_type != "cloze" and not back:
                 continue
             if not source_excerpt:
-                source_excerpt = best_excerpt_for_candidates(source_text, [front, back, extra]) if source_text.strip() else ""
+                source_excerpt = (
+                    best_excerpt_for_candidates(source_text, [front, back, extra])
+                    if source_text.strip()
+                    else ""
+                )
             cards.append(
                 AIGeneratedCard(
                     type=card_type,
@@ -503,7 +589,11 @@ class AIService:
             source_text=source_text,
             include_anki_coverage=include_anki_coverage,
         )
-        prompt = settings.ai.prompts.auto_flashcards if auto else settings.ai.prompts.flashcards
+        prompt = (
+            settings.ai.prompts.auto_flashcards
+            if auto
+            else settings.ai.prompts.flashcards
+        )
         prompt = (
             f"{prompt}\n\n"
             "Mandatory output rules for this request:\n"
@@ -530,7 +620,10 @@ class AIService:
             task="auto_flashcards" if auto else "flashcards",
             messages=[
                 {"role": "system", "content": prompt},
-                {"role": "user", "content": json.dumps(user_payload, ensure_ascii=False, indent=2)},
+                {
+                    "role": "user",
+                    "content": json.dumps(user_payload, ensure_ascii=False, indent=2),
+                },
             ],
             model=model,
             temperature=0.0,
@@ -545,6 +638,72 @@ class AIService:
             "cards": [card.model_dump() for card in cards],
             "total_local_cards": coverage_context["total_local_cards"],
             "total_anki_cards_scanned": coverage_context["total_anki_cards_scanned"],
-            "relevant_anki_cards_shared": coverage_context["relevant_anki_cards_shared"],
+            "relevant_anki_cards_shared": coverage_context[
+                "relevant_anki_cards_shared"
+            ],
+            "note_only": True,
+        }
+
+    async def suggest_cards_for_gaps(
+        self,
+        settings: AppSettings,
+        *,
+        note: NoteDocument,
+        gap_excerpts: list[str],
+        model: str | None = None,
+    ) -> dict[str, Any]:
+        if not gap_excerpts:
+            raise AIServiceError("No gap excerpts provided for card suggestions.")
+        combined_gaps = "\n\n---\n\n".join(gap_excerpts)
+        coverage_context = await self._build_semantic_coverage_context(
+            settings,
+            note=note,
+            source_text=combined_gaps,
+            include_anki_coverage=True,
+        )
+        prompt = settings.ai.prompts.flashcards
+        prompt = (
+            f"{prompt}\n\n"
+            "Your task: Generate flashcards that cover the uncovered gaps in the note.\n"
+            "Focus on creating cards for the gap excerpts provided below.\n"
+            "Mandatory output rules for this request:\n"
+            "- Output one JSON object only. No commentary, no chain-of-thought, no markdown fences.\n"
+            "- Every returned card must contain source_excerpt copied verbatim from the provided gap excerpts.\n"
+            "- If a card cannot be grounded in the gap excerpts, do not return it."
+        )
+        user_payload: dict[str, Any] = {
+            "task": "gap_coverage_cards",
+            "note_title": note.meta.title,
+            "gap_excerpts": gap_excerpts,
+            "semantic_existing_card_context": coverage_context,
+        }
+        content, selected_model, provider = await self._chat_completion(
+            settings,
+            task="flashcards",
+            messages=[
+                {"role": "system", "content": prompt},
+                {
+                    "role": "user",
+                    "content": json.dumps(user_payload, ensure_ascii=False, indent=2),
+                },
+            ],
+            model=model,
+            temperature=0.0,
+        )
+        parsed = self._extract_json_payload(content)
+        cards = self._normalize_generated_cards(parsed, source_text=combined_gaps)
+        if not cards:
+            raise AIServiceError(
+                "AI did not return any usable flashcards for the gaps."
+            )
+        return {
+            "provider": provider,
+            "model": selected_model,
+            "cards": [card.model_dump() for card in cards],
+            "total_local_cards": coverage_context["total_local_cards"],
+            "total_anki_cards_scanned": coverage_context["total_anki_cards_scanned"],
+            "relevant_anki_cards_shared": coverage_context[
+                "relevant_anki_cards_shared"
+            ],
             "note_only": True,
         }

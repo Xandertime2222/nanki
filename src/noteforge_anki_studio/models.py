@@ -215,6 +215,12 @@ class AIGenerateCardsRequest(BaseModel):
     include_anki_coverage: bool | None = None
 
 
+class AISuggestCardsForGapsRequest(BaseModel):
+    note_id: str
+    gap_excerpts: list[str]
+    model: str | None = None
+
+
 class AIGeneratedCard(BaseModel):
     type: CardType | Literal["cloze"] = "basic"
     front: str = ""

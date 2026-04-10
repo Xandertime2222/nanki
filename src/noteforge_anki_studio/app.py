@@ -20,6 +20,7 @@ from .models import (
     AIChatRequest,
     AIExplainRequest,
     AIGenerateCardsRequest,
+    AISuggestCardsForGapsRequest,
     AppSettings,
     AnkiPushRequest,
     Card,
@@ -81,7 +82,9 @@ async def update_workspace(payload: WorkspaceUpdateRequest) -> AppSettings:
 @app.get("/api/notes")
 async def list_notes() -> list[dict]:
     notes = store.list_notes()
-    notes.sort(key=lambda item: (not item.meta.pinned, item.meta.updated_at), reverse=True)
+    notes.sort(
+        key=lambda item: (not item.meta.pinned, item.meta.updated_at), reverse=True
+    )
     return [item.model_dump() for item in notes]
 
 
@@ -89,7 +92,9 @@ async def list_notes() -> list[dict]:
 async def create_note(payload: CreateNoteRequest) -> dict:
     note = store.create_note(
         title=payload.title,
-        content=payload.content if payload.content is not None else f"# {payload.title}\n\n",
+        content=payload.content
+        if payload.content is not None
+        else f"# {payload.title}\n\n",
         tags=payload.tags,
         default_deck=payload.default_deck,
     )
@@ -173,7 +178,9 @@ async def import_text(payload: ImportTextRequest) -> dict:
         default_deck=payload.default_deck,
         source=manifest,
     )
-    saved_name = store.save_source_file(note.meta.id, manifest.original_filename or f"{title}.txt", data)
+    saved_name = store.save_source_file(
+        note.meta.id, manifest.original_filename or f"{title}.txt", data
+    )
     manifest.stored_filename = saved_name
     note.source = manifest
     note = store.save_note_document(note)
@@ -187,7 +194,9 @@ async def get_note_source(note_id: str) -> dict:
         return {"source": None}
     payload = note.source.model_dump()
     if note.source.stored_filename:
-        payload["file_url"] = f"/api/notes/{note_id}/source/file/{note.source.stored_filename}"
+        payload["file_url"] = (
+            f"/api/notes/{note_id}/source/file/{note.source.stored_filename}"
+        )
     return {"source": payload}
 
 
@@ -214,7 +223,9 @@ async def get_note_coverage(note_id: str) -> dict:
         anki_status["available"] = True
     except (AnkiConnectError, Exception) as exc:
         anki_status["error"] = str(exc)
-    return build_note_coverage(note, external_cards=external_cards, anki_status=anki_status)
+    return build_note_coverage(
+        note, external_cards=external_cards, anki_status=anki_status
+    )
 
 
 @app.post("/api/render-markdown")
@@ -287,7 +298,11 @@ async def export_csv(note_id: str) -> dict:
     note = store.load_note(note_id)
     path = store.export_path(note_id, ".csv")
     exporter.export_csv(note, path)
-    return {"path": str(path), "filename": path.name, "url": f"/api/download?path={path}"}
+    return {
+        "path": str(path),
+        "filename": path.name,
+        "url": f"/api/download?path={path}",
+    }
 
 
 @app.post("/api/notes/{note_id}/cards/export/anki-txt")
@@ -295,7 +310,11 @@ async def export_anki_txt(note_id: str) -> dict:
     note = store.load_note(note_id)
     path = store.export_path(note_id, ".txt")
     exporter.export_anki_txt(note, path)
-    return {"path": str(path), "filename": path.name, "url": f"/api/download?path={path}"}
+    return {
+        "path": str(path),
+        "filename": path.name,
+        "url": f"/api/download?path={path}",
+    }
 
 
 @app.post("/api/notes/{note_id}/cards/export/apkg")
@@ -303,7 +322,11 @@ async def export_apkg(note_id: str) -> dict:
     note = store.load_note(note_id)
     path = store.export_path(note_id, ".apkg")
     exporter.export_apkg(note, path)
-    return {"path": str(path), "filename": path.name, "url": f"/api/download?path={path}"}
+    return {
+        "path": str(path),
+        "filename": path.name,
+        "url": f"/api/download?path={path}",
+    }
 
 
 @app.get("/api/download")
@@ -405,7 +428,28 @@ async def ai_generate_cards(payload: AIGenerateCardsRequest) -> dict:
             target_count=payload.target_count,
             auto=payload.auto,
             model=payload.model,
-            include_anki_coverage=(payload.include_anki_coverage if payload.include_anki_coverage is not None else settings.ai.use_anki_coverage_context),
+            include_anki_coverage=(
+                payload.include_anki_coverage
+                if payload.include_anki_coverage is not None
+                else settings.ai.use_anki_coverage_context
+            ),
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except (AIConfigurationError, AIServiceError, Exception) as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.post("/api/ai/suggest-cards-for-gaps")
+async def ai_suggest_cards_for_gaps(payload: AISuggestCardsForGapsRequest) -> dict:
+    settings = settings_manager.load()
+    try:
+        note = store.load_note(payload.note_id)
+        return await ai_service.suggest_cards_for_gaps(
+            settings,
+            note=note,
+            gap_excerpts=payload.gap_excerpts,
+            model=payload.model,
         )
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -425,7 +469,11 @@ async def push_cards_to_anki(note_id: str, payload: AnkiPushRequest) -> dict:
             note,
             cards,
             override_deck=payload.deck_name,
-            sync_after_push=(payload.sync_after_push if payload.sync_after_push is not None else settings_manager.load().auto_sync),
+            sync_after_push=(
+                payload.sync_after_push
+                if payload.sync_after_push is not None
+                else settings_manager.load().auto_sync
+            ),
         )
     except (AnkiConnectError, Exception) as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc

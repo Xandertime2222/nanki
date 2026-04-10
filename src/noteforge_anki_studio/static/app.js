@@ -177,6 +177,9 @@ const I18N = {
     'coverage.everythingCovered': 'Everything currently has at least some card coverage.',
     'coverage.allMapped': 'All saved cards are mapped to note text.',
     'coverage.noSourceReference': 'No source reference stored.',
+    'coverage.suggestCards': 'Suggest cards',
+    'coverage.suggestingCards': 'Generating suggestions...',
+    'coverage.suggestCardsForGaps': 'Suggest cards for gaps',
     'source.title': 'Imported source',
     'source.openOriginal': 'Open original',
     'source.noSource': 'No imported source for this note.',
@@ -395,6 +398,9 @@ const I18N = {
     'coverage.everythingCovered': 'Aktuell hat jeder Bereich zumindest etwas Kartenabdeckung.',
     'coverage.allMapped': 'Alle gespeicherten Karten sind dem Notiztext zugeordnet.',
     'coverage.noSourceReference': 'Kein Quellenhinweis gespeichert.',
+    'coverage.suggestCards': 'Karten vorschlagen',
+    'coverage.suggestingCards': 'Vorschläge werden generiert...',
+    'coverage.suggestCardsForGaps': 'Karten für Lücken vorschlagen',
     'source.title': 'Importierte Quelle',
     'source.openOriginal': 'Original öffnen',
     'source.noSource': 'Für diese Notiz gibt es keine importierte Quelle.',
@@ -1797,6 +1803,68 @@ const markCoverageStale = () => {
   }
 };
 
+const suggestCardsForGaps = async () => {
+  const report = state.coverageReport;
+  if (!report || !state.activeNoteId) {
+    showToast(t('coverage.noGaps'), 'error');
+    return;
+  }
+  const gaps = report.gaps || [];
+  if (!gaps.length) {
+    showToast(t('coverage.everythingCovered'), 'error');
+    return;
+  }
+  const gapExcerpts = gaps.map((gap) => gap.excerpt).filter((excerpt) => excerpt && excerpt.trim());
+  if (!gapExcerpts.length) {
+    showToast(t('coverage.noGaps'), 'error');
+    return;
+  }
+  if (els.suggestCardsForGapsBtn) {
+    els.suggestCardsForGapsBtn.disabled = true;
+    els.suggestCardsForGapsBtn.textContent = t('coverage.suggestingCards');
+  }
+  try {
+    const result = await fetchJson('/api/ai/suggest-cards-for-gaps', {
+      method: 'POST',
+      body: JSON.stringify({
+        note_id: state.activeNoteId,
+        gap_excerpts: gapExcerpts,
+      }),
+    });
+    const cards = result.cards || [];
+    if (!cards.length) {
+      showToast('No card suggestions generated', 'error');
+      return;
+    }
+    await showCardSuggestions(cards);
+    showToast(`Generated ${cards.length} card suggestion(s) for gaps`, 'success');
+  } catch (error) {
+    showToast(error.message || 'Failed to generate card suggestions', 'error');
+  } finally {
+    if (els.suggestCardsForGapsBtn) {
+      els.suggestCardsForGapsBtn.disabled = false;
+      els.suggestCardsForGapsBtn.textContent = t('coverage.suggestCards');
+    }
+  }
+};
+
+const showCardSuggestions = async (cards) => {
+  for (const cardData of cards) {
+    const payload = {
+      type: cardData.type || 'basic',
+      front: cardData.front || '',
+      back: cardData.back || '',
+      extra: cardData.extra || '',
+      tags: cardData.tags || [],
+      deck_name: cardData.deck_name || state.activeNote?.meta.default_deck || 'Default',
+      source_excerpt: cardData.source_excerpt || '',
+      source_locator: '',
+    };
+    await saveCardPayload(payload);
+  }
+  renderCardList();
+};
+
 const cloneAnchor = (anchor) => (anchor ? JSON.parse(JSON.stringify(anchor)) : null);
 
 const smartSplitSelection = (text) => {
@@ -2421,6 +2489,7 @@ const bindEvents = () => {
 
   els.pushAllBtn.addEventListener('click', () => pushCards().catch((error) => showToast(error.message, 'error')));
   els.refreshCoverageBtn.addEventListener('click', () => loadCoverage({ force: true }).catch((error) => showToast(error.message, 'error')));
+  if (els.suggestCardsForGapsBtn) els.suggestCardsForGapsBtn.addEventListener('click', () => suggestCardsForGaps().catch((error) => showToast(error.message, 'error')));
 
   els.newCardBtn.addEventListener('click', openBlankCardDrawer);
   els.drawerCloseBtn.addEventListener('click', () => closeDrawer({ reset: true }));
@@ -2544,6 +2613,7 @@ const mapElements = () => {
     coverageUnmapped: document.getElementById('coverage-unmapped'),
     coverageAnkiMatches: document.getElementById('coverage-anki-matches'),
     refreshCoverageBtn: document.getElementById('refresh-coverage-btn'),
+    suggestCardsForGapsBtn: document.getElementById('suggest-cards-for-gaps-btn'),
     sourceSummary: document.getElementById('source-summary'),
     sourceViewer: document.getElementById('source-viewer'),
     pdfPreview: document.getElementById('pdf-preview'),
