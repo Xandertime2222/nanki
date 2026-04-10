@@ -184,21 +184,6 @@ def main() -> int:
 
         logger.info(f"Server is ready, opening window")
 
-        # Determine window icon
-        icon_path = None
-        if getattr(sys, "frozen", False):
-            if sys.platform == "win32":
-                icon_path = os.path.join(sys._MEIPASS, "assets", "nanki-icon.ico")
-            elif sys.platform == "darwin":
-                icon_path = os.path.join(sys._MEIPASS, "assets", "nanki-icon.icns")
-        else:
-            # Development mode
-            base_path = Path(__file__).parent / "assets"
-            if sys.platform == "win32":
-                icon_path = str(base_path / "nanki-icon.ico")
-            elif sys.platform == "darwin":
-                icon_path = str(base_path / "nanki-icon.icns")
-
         # Create native desktop window
         window = webview.create_window(
             title="Nanki — Study Workspace",
