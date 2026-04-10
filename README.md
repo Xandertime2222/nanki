@@ -257,6 +257,12 @@ Please make sure to update tests as appropriate.
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
+### Third-Party Licenses
+
+This project uses open-source libraries with compatible licenses. See [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) for details.
+
+> **Note:** PyMuPDF is licensed under AGPL-3.0. For desktop use (this project), this does not impose additional obligations. If you plan to offer Nanki as a network service, please review PyMuPDF's licensing terms or replace it with an MIT/BSD-licensed alternative.
+
 ---
 
 ## 🙏 Acknowledgments
