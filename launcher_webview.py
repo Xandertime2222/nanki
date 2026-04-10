@@ -45,79 +45,48 @@ if sys.stdout is None:
 if sys.stderr is None:
     sys.stderr = io.StringIO()
 
-# Global server instance for cleanup
-_server_instance = None
 
-
-def _is_port_in_use(host: str, port: int) -> bool:
-    """Check if a port is already in use by trying to connect."""
-    try:
-        with socket.create_connection((host, port), timeout=0.5):
-            return True
-    except OSError:
-        return False
-
-
-def _port_can_bind(host: str, port: int) -> bool:
-    """Check if we can bind to a port."""
+def _port_available(host: str, port: int) -> bool:
+    """Check if a port is available for binding."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
-            # On Windows, SO_REUSEADDR has different behavior
-            # We want to check if the port is truly available
-            if sys.platform == "win32":
-                # Don't use SO_REUSEADDR for the check on Windows
-                s.bind((host, port))
-            else:
-                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                s.bind((host, port))
+            s.bind((host, port))
             return True
         except OSError:
             return False
 
 
-def _find_free_port(host: str, start: int, attempts: int = 100) -> int:
+def _find_free_port(host: str, start: int, attempts: int = 50) -> int:
     """Find a free port starting from *start*."""
     for offset in range(attempts):
         port = start + offset
-        # First check if port is already in use (someone listening)
-        if _is_port_in_use(host, port):
-            logger.info(f"Port {port} is already in use, skipping...")
-            continue
-        # Then check if we can bind to it
-        if _port_can_bind(host, port):
-            logger.info(f"Found free port: {port}")
+        if _port_available(host, port):
+            logger.info(f"Using port {port}")
             return port
     raise RuntimeError(f"No free port found in range {start}–{start + attempts - 1}")
 
 
-def _wait_for_server(host: str, port: int, timeout: float = 30.0) -> bool:
+def _wait_for_server(host: str, port: int, timeout: float = 15.0) -> bool:
     """Block until the server accepts connections or timeout."""
     deadline = time.monotonic() + timeout
     attempts = 0
-    last_error = None
-    
     while time.monotonic() < deadline:
-        attempts += 1
         try:
-            with socket.create_connection((host, port), timeout=1.0):
+            with socket.create_connection((host, port), timeout=0.5):
                 logger.info(f"Server ready at {host}:{port} after {attempts} attempts")
                 return True
-        except OSError as e:
-            last_error = e
-            time.sleep(0.3)
-    
-    logger.error(f"Server failed to start after {timeout}s: {last_error}")
+        except OSError:
+            attempts += 1
+            time.sleep(0.2)
     return False
 
 
 def start_server(host: str, port: int) -> None:
     """Run the FastAPI server (called in a daemon thread)."""
-    global _server_instance
     try:
-        logger.info(f"Starting uvicorn server on {host}:{port}")
-        
-        # Configure uvicorn with proper logging
-        config = uvicorn.Config(
+        logger.info(f"Starting server on {host}:{port}")
+        uvicorn.run(
             app,
             host=host,
             port=port,
@@ -125,9 +94,6 @@ def start_server(host: str, port: int) -> None:
             access_log=False,
             workers=1,
         )
-        _server_instance = uvicorn.Server(config)
-        _server_instance.run()
-        
     except Exception as e:
         logger.error(f"Server failed to start: {e}")
         raise
@@ -152,8 +118,6 @@ def main() -> int:
     """Launch Nanki in a native desktop window."""
     try:
         logger.info("Starting Nanki desktop application")
-        logger.info(f"Platform: {sys.platform}")
-        logger.info(f"Python: {sys.version}")
 
         # Import after logging is set up
         from noteforge_anki_studio.app import app
@@ -163,15 +127,12 @@ def main() -> int:
         settings = settings_manager.load()
 
         host = settings.host or "127.0.0.1"
-        default_port = settings.port or 7788
-        
-        logger.info(f"Default port from settings: {default_port}")
+        port = settings.port or 7788
 
-        # Find a free port (more robust check)
-        port = _find_free_port(host, default_port)
-        
-        if port != default_port:
-            logger.warning(f"Port {default_port} unavailable, using port {port}")
+        # If the default port is taken, find the next free one
+        if not _port_available(host, port):
+            logger.warning(f"Port {port} is in use, finding alternative")
+            port = _find_free_port(host, port + 1)
 
         url = f"http://{host}:{port}"
 
@@ -183,13 +144,11 @@ def main() -> int:
 
         # Wait until the server is ready before opening the window
         logger.info(f"Waiting for server to be ready at {url}")
-        if not _wait_for_server(host, port, timeout=30.0):
-            error_msg = f"Failed to start server at {url}.\n\nThis usually means:\n1. Another Nanki instance is already running\n2. A firewall is blocking the connection\n\nPlease close any running Nanki instances and try again."
+        if not _wait_for_server(host, port):
+            error_msg = f"Failed to start server at {url}. Please check if another instance is running."
             logger.error(error_msg)
             show_error(error_msg)
             return 1
-
-        logger.info(f"Server is ready, opening window")
 
         # Determine window icon
         icon_path = None
@@ -198,13 +157,6 @@ def main() -> int:
                 icon_path = os.path.join(sys._MEIPASS, "assets", "nanki-icon.ico")
             elif sys.platform == "darwin":
                 icon_path = os.path.join(sys._MEIPASS, "assets", "nanki-icon.icns")
-        else:
-            # Development mode
-            base_path = Path(__file__).parent / "assets"
-            if sys.platform == "win32":
-                icon_path = str(base_path / "nanki-icon.ico")
-            elif sys.platform == "darwin":
-                icon_path = str(base_path / "nanki-icon.icns")
 
         # Create native desktop window with better defaults
         window = webview.create_window(
@@ -217,13 +169,12 @@ def main() -> int:
             resizable=True,
             fullscreen=False,
             text_select=True,
-            background_color="#09090b" if sys.platform == "win32" else "#ffffff",
+            background_color="#09090b" if webview.platforms.winforms else "#ffffff",
         )
 
         # Handle window events
         def on_closing():
-            logger.info("Application closing, stopping server...")
-            # Server is daemon thread, will be killed automatically
+            logger.info("Application closing")
             return True
 
         window.events.closing += on_closing
