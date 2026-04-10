@@ -2018,13 +2018,10 @@ const markCoverageStale = () => {
   if (els.refreshCoverageBtn) {
     els.refreshCoverageBtn.classList.add('stale');
   }
-  // Refresh in the background only if the user is actively viewing coverage.
-  const viewingCoverage = state.coverageView || (state.studyOpen && state.inspectorPanel === 'coverage');
-  if (viewingCoverage) {
-    state.coverageRefreshTimer = window.setTimeout(() => {
-      loadCoverage({ quiet: true, force: true }).catch(() => {});
-    }, 600);
-  }
+  // Refresh in the background after a short delay.
+  state.coverageRefreshTimer = window.setTimeout(() => {
+    loadCoverage({ quiet: true, force: true }).catch(() => {});
+  }, 300);
 };
 
 const suggestCardsForGaps = async () => {
@@ -2301,7 +2298,6 @@ const saveDrawerCard = async ({ pushAfterSave = false } = {}) => {
 const deleteCard = async (cardId) => {
   if (!window.confirm(t('dialogs.deleteCardConfirm'))) return;
   if (!state.activeNoteId) return;
-  showLoading('Deleting card...');
   try {
     await fetchJson(`/api/notes/${state.activeNoteId}/cards/${cardId}`, { method: 'DELETE' });
     renderCardList();
@@ -2309,8 +2305,6 @@ const deleteCard = async (cardId) => {
     showToast(t('toast.cardDeleted'), 'success');
   } catch (error) {
     showToast(error.message, 'error');
-  } finally {
-    hideLoading();
   }
 };
 
