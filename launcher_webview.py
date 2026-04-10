@@ -51,22 +51,26 @@ if sys.stderr is None:
 
 def _is_port_listening(host: str, port: int) -> bool:
     """Check if something is LISTENING on the port.
-    
-    We do NOT bind to the port - we only try to connect.
-    This avoids TIME_WAIT issues on Windows.
+
+    We try to bind to the port with SO_REUSEADDR.
+    If bind fails, something is actually listening.
     """
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     try:
-        with socket.create_connection((host, port), timeout=0.3):
-            # Connection succeeded = something is listening
-            return True
-    except OSError:
-        # Connection refused = nothing listening = port is free
+        sock.bind((host, port))
+        # Bind succeeded = port is free
+        sock.close()
         return False
+    except OSError:
+        # Bind failed = something is listening
+        sock.close()
+        return True
 
 
 def _find_free_port(host: str, start: int, attempts: int = 100) -> int:
     """Find a port where nothing is listening.
-    
+
     CRITICAL: We only check if something is LISTENING.
     We do NOT try to bind - that causes TIME_WAIT on Windows.
     """
@@ -76,7 +80,7 @@ def _find_free_port(host: str, start: int, attempts: int = 100) -> int:
             logger.info(f"Port {port} is free (nothing listening)")
             return port
         logger.info(f"Port {port} is in use, trying next...")
-    
+
     raise RuntimeError(f"No free port found in range {start}–{start + attempts - 1}")
 
 
@@ -85,7 +89,7 @@ def _wait_for_server(host: str, port: int, timeout: float = 30.0) -> bool:
     deadline = time.monotonic() + timeout
     attempts = 0
     last_error = None
-    
+
     while time.monotonic() < deadline:
         attempts += 1
         try:
@@ -95,7 +99,7 @@ def _wait_for_server(host: str, port: int, timeout: float = 30.0) -> bool:
         except OSError as e:
             last_error = e
             time.sleep(0.2)
-    
+
     logger.error(f"Server failed to start after {timeout}s: {last_error}")
     return False
 
@@ -148,14 +152,16 @@ def main() -> int:
 
         host = settings.host or "127.0.0.1"
         default_port = settings.port or 7788
-        
+
         logger.info(f"Default port from settings: {default_port}")
 
         # Find a free port - ONLY check if something is listening, NEVER bind
         port = _find_free_port(host, default_port)
-        
+
         if port != default_port:
-            logger.warning(f"Port {default_port} has something listening, using port {port}")
+            logger.warning(
+                f"Port {default_port} has something listening, using port {port}"
+            )
 
         url = f"http://{host}:{port}"
 
