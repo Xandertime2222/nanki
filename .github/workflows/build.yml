@@ -7,6 +7,7 @@ on:
   workflow_dispatch:
 
 env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   PYTHON_VERSION: '3.12'
   APP_NAME: Nanki
   APP_VERSION: '0.3.2'
@@ -17,9 +18,9 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -84,10 +85,14 @@ jobs:
       - name: Verify build
         shell: pwsh
         run: |
-          if (-not (Test-Path "dist/${{ env.APP_NAME }}/${{ env.APP_NAME }}.exe")) {
-            Write-Error "${{ env.APP_NAME }}.exe not found!"
+          $exePath = "dist/${{ env.APP_NAME }}/${{ env.APP_NAME }}.exe"
+          if (-not (Test-Path $exePath)) {
+            Write-Error "$exePath not found!"
+            Get-ChildItem -Recurse dist | Select-Object FullName
             exit 1
           }
+
+          Write-Host "Build verified: $exePath"
 
       - name: Install NSIS
         shell: pwsh
@@ -96,19 +101,24 @@ jobs:
       - name: Create installer
         shell: pwsh
         run: |
-          $nsisContent = @"
-          !define PRODUCT_NAME "${{ env.APP_NAME }}"
-          !define PRODUCT_VERSION "${{ env.APP_VERSION }}"
-          !define PRODUCT_PUBLISHER "${{ env.PUBLISHER }}"
-          !define PRODUCT_EXE "${{ env.APP_NAME }}.exe"
+          if (-not (Test-Path "assets/nanki-icon.ico")) {
+            Write-Error "Missing icon: assets/nanki-icon.ico"
+            exit 1
+          }
+
+          $nsisContent = @'
+          !define PRODUCT_NAME "__APP_NAME__"
+          !define PRODUCT_VERSION "__APP_VERSION__"
+          !define PRODUCT_PUBLISHER "__PUBLISHER__"
           !define PRODUCT_ICON "assets\nanki-icon.ico"
+          !define PRODUCT_EXE "__APP_NAME__.exe"
 
           !include "MUI2.nsh"
 
-          Name "${{ env.APP_NAME }}"
-          OutFile "${{ env.APP_NAME }}-Windows-Setup.exe"
-          InstallDir "$PROGRAMFILES64\${{ env.APP_NAME }}"
-          InstallDirRegKey HKLM "Software\${{ env.APP_NAME }}" "Install_Dir"
+          Name "${PRODUCT_NAME}"
+          OutFile "__APP_NAME__-Windows-Setup.exe"
+          InstallDir "$PROGRAMFILES64\__APP_NAME__"
+          InstallDirRegKey HKLM "Software\__APP_NAME__" "Install_Dir"
           RequestExecutionLevel admin
 
           !define MUI_ICON "${PRODUCT_ICON}"
@@ -117,13 +127,13 @@ jobs:
           !insertmacro MUI_PAGE_WELCOME
           !insertmacro MUI_PAGE_DIRECTORY
           !insertmacro MUI_PAGE_INSTFILES
-          !define MUI_FINISHPAGE_RUN "$INSTDIR\${{ env.APP_NAME }}.exe"
+          !define MUI_FINISHPAGE_RUN "$INSTDIR\__APP_NAME__.exe"
           !insertmacro MUI_PAGE_FINISH
 
           !insertmacro MUI_LANGUAGE "English"
 
           Function .onInit
-            ReadRegStr $0 HKLM "Software\${{ env.APP_NAME }}" "Install_Dir"
+            ReadRegStr $0 HKLM "Software\__APP_NAME__" "Install_Dir"
             StrCmp $0 "" done
             IfFileExists "$0\Uninstall.exe" 0 done
             ExecWait '"$0\Uninstall.exe" /S _?=$0'
@@ -132,36 +142,53 @@ jobs:
 
           Section "Install" SecInstall
             SetOutPath "$INSTDIR"
-            File /r "dist\${{ env.APP_NAME }}\*.*"
+            File /r "dist\__APP_NAME__\*.*"
 
-            CreateDirectory "$SMPROGRAMS\${{ env.APP_NAME }}"
-            CreateShortcut "$SMPROGRAMS\${{ env.APP_NAME }}\${{ env.APP_NAME }}.lnk" "$INSTDIR\${{ env.APP_NAME }}.exe" "" "$INSTDIR\${{ env.APP_NAME }}.exe" 0
-            CreateShortcut "$DESKTOP\${{ env.APP_NAME }}.lnk" "$INSTDIR\${{ env.APP_NAME }}.exe" "" "$INSTDIR\${{ env.APP_NAME }}.exe" 0
+            CreateDirectory "$SMPROGRAMS\__APP_NAME__"
+            CreateShortcut "$SMPROGRAMS\__APP_NAME__\__APP_NAME__.lnk" "$INSTDIR\__APP_NAME__.exe" "" "$INSTDIR\__APP_NAME__.exe" 0
+            CreateShortcut "$DESKTOP\__APP_NAME__.lnk" "$INSTDIR\__APP_NAME__.exe" "" "$INSTDIR\__APP_NAME__.exe" 0
 
             WriteUninstaller "$INSTDIR\Uninstall.exe"
-            WriteRegStr HKLM "Software\${{ env.APP_NAME }}" "Install_Dir" "$INSTDIR"
-            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${{ env.APP_NAME }}" "DisplayName" "${{ env.APP_NAME }}"
-            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${{ env.APP_NAME }}" "UninstallString" "$INSTDIR\Uninstall.exe"
-            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${{ env.APP_NAME }}" "DisplayIcon" "$INSTDIR\${{ env.APP_NAME }}.exe"
-            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${{ env.APP_NAME }}" "Publisher" "${{ env.PUBLISHER }}"
-            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${{ env.APP_NAME }}" "DisplayVersion" "${{ env.APP_VERSION }}"
+            WriteRegStr HKLM "Software\__APP_NAME__" "Install_Dir" "$INSTDIR"
+            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\__APP_NAME__" "DisplayName" "__APP_NAME__"
+            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\__APP_NAME__" "UninstallString" "$INSTDIR\Uninstall.exe"
+            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\__APP_NAME__" "DisplayIcon" "$INSTDIR\__APP_NAME__.exe"
+            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\__APP_NAME__" "Publisher" "__PUBLISHER__"
+            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\__APP_NAME__" "DisplayVersion" "__APP_VERSION__"
           SectionEnd
 
           Section "Uninstall" SecUninstall
             RMDir /r "$INSTDIR"
-            Delete "$DESKTOP\${{ env.APP_NAME }}.lnk"
-            Delete "$SMPROGRAMS\${{ env.APP_NAME }}\${{ env.APP_NAME }}.lnk"
-            RMDir "$SMPROGRAMS\${{ env.APP_NAME }}"
-            DeleteRegKey HKLM "Software\${{ env.APP_NAME }}"
-            DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${{ env.APP_NAME }}"
+            Delete "$DESKTOP\__APP_NAME__.lnk"
+            Delete "$SMPROGRAMS\__APP_NAME__\__APP_NAME__.lnk"
+            RMDir "$SMPROGRAMS\__APP_NAME__"
+            DeleteRegKey HKLM "Software\__APP_NAME__"
+            DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\__APP_NAME__"
           SectionEnd
-          "@
+          '@
+
+          $nsisContent = $nsisContent.Replace("__APP_NAME__", "${{ env.APP_NAME }}")
+          $nsisContent = $nsisContent.Replace("__APP_VERSION__", "${{ env.APP_VERSION }}")
+          $nsisContent = $nsisContent.Replace("__PUBLISHER__", "${{ env.PUBLISHER }}")
 
           Set-Content -Path "build.nsi" -Value $nsisContent -Encoding UTF8
+          Get-Content "build.nsi"
           & "C:\Program Files (x86)\NSIS\makensis.exe" build.nsi
 
+      - name: Verify installer
+        shell: pwsh
+        run: |
+          $installerPath = "${{ env.APP_NAME }}-Windows-Setup.exe"
+          if (-not (Test-Path $installerPath)) {
+            Write-Error "$installerPath not found!"
+            Get-ChildItem -Recurse . | Select-Object FullName
+            exit 1
+          }
+
+          Write-Host "Installer verified: $installerPath"
+
       - name: Upload installer
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: nanki-windows
           path: ${{ env.APP_NAME }}-Windows-Setup.exe
@@ -178,13 +205,14 @@ jobs:
     runs-on: macos-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Install dependencies
+        shell: bash
         run: |
           python -m pip install --upgrade pip
           pip install -e .
@@ -197,7 +225,6 @@ jobs:
 
           mkdir -p build/icon.iconset
 
-          # Use existing repo icons where possible.
           cp assets/icon-16.png build/icon.iconset/icon_16x16.png
           cp assets/icon-32.png build/icon.iconset/icon_16x16@2x.png
           cp assets/icon-32.png build/icon.iconset/icon_32x32.png
@@ -292,7 +319,7 @@ jobs:
           rm -f "$RW_DMG"
 
       - name: Upload DMG
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: nanki-macos
           path: ${{ env.APP_NAME }}-macOS-arm64.dmg
