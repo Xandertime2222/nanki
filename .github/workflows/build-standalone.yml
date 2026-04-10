@@ -54,9 +54,8 @@ jobs:
             --windowed `
             --noconsole `
             --icon "assets/nanki-icon.ico" `
-            --add-data "src/noteforge_anki_studio;noteforge_anki_studio" `
-            --add-data "src/noteforge_anki_studio/static;noteforge_anki_studio/static" `
             --add-data "src/noteforge_anki_studio/templates;noteforge_anki_studio/templates" `
+            --add-data "src/noteforge_anki_studio/static;noteforge_anki_studio/static" `
             --add-data "assets;assets" `
             --hidden-import noteforge_anki_studio `
             --hidden-import noteforge_anki_studio.ai `
@@ -67,14 +66,21 @@ jobs:
             --hidden-import noteforge_anki_studio.importers `
             --hidden-import noteforge_anki_studio.models `
             --hidden-import noteforge_anki_studio.storage `
+            --hidden-import noteforge_anki_studio.prompts `
             --hidden-import webview `
             --hidden-import webview.platforms.winforms `
             --hidden-import mistune `
             --hidden-import markdownify `
+            --hidden-import fitz `
             --collect-all noteforge_anki_studio `
+            --collect-all mistune `
+            --collect-all markdownify `
             --distpath dist-standalone `
             --workpath build-standalone `
             standalone.py
+          
+          Write-Host "Build output:"
+          Get-ChildItem dist-standalone -Recurse | Select-Object FullName, Length
 
       - name: List built files
         shell: pwsh
@@ -126,21 +132,32 @@ jobs:
             --icon "assets/nanki-icon.icns" \
             --osx-bundle-identifier "com.nanki.standalone" \
             --target-arch arm64 \
-            --add-data "src/noteforge_anki_studio:noteforge_anki_studio" \
-            --add-data "src/noteforge_anki_studio/static:noteforge_anki_studio/static" \
             --add-data "src/noteforge_anki_studio/templates:noteforge_anki_studio/templates" \
+            --add-data "src/noteforge_anki_studio/static:noteforge_anki_studio/static" \
             --add-data "assets:assets" \
             --hidden-import noteforge_anki_studio \
+            --hidden-import noteforge_anki_studio.ai \
+            --hidden-import noteforge_anki_studio.anki_connect \
+            --hidden-import noteforge_anki_studio.config \
+            --hidden-import noteforge_anki_studio.coverage \
+            --hidden-import noteforge_anki_studio.exporters \
+            --hidden-import noteforge_anki_studio.importers \
+            --hidden-import noteforge_anki_studio.models \
+            --hidden-import noteforge_anki_studio.storage \
+            --hidden-import noteforge_anki_studio.prompts \
             --hidden-import webview \
             --hidden-import webview.platforms.cocoa \
+            --hidden-import mistune \
+            --hidden-import markdownify \
+            --hidden-import fitz \
             --collect-all noteforge_anki_studio \
+            --collect-all mistune \
+            --collect-all markdownify \
             --distpath dist-standalone \
             --workpath build-standalone \
             standalone.py
-
-      - name: List built files
-        run: |
-          echo "Built files:"
+          
+          echo "Build output:"
           ls -la dist-standalone/
 
       - name: Upload macOS artifact

@@ -21,6 +21,80 @@ logging.basicConfig(
 )
 logger = logging.getLogger("Nanki")
 
+
+def get_base_path() -> Path:
+    """Get the base path for bundled resources."""
+    if getattr(sys, "frozen", False):
+        # Running as compiled executable
+        return Path(sys._MEIPASS)
+    else:
+        # Running as script
+        return Path(__file__).parent
+
+
+def get_html() -> str:
+    """Load the main HTML template."""
+    base_path = get_base_path()
+    
+    # Try multiple possible paths for the template
+    template_paths = [
+        base_path / "noteforge_anki_studio" / "templates" / "index.html",
+        base_path / "templates" / "index.html",
+        base_path / "src" / "noteforge_anki_studio" / "templates" / "index.html",
+    ]
+    
+    for template_path in template_paths:
+        if template_path.exists():
+            logger.info(f"Loading template from: {template_path}")
+            return template_path.read_text(encoding="utf-8")
+    
+    # Log all searched paths for debugging
+    logger.error(f"Template not found. Searched paths:")
+    for p in template_paths:
+        logger.error(f"  - {p} (exists: {p.exists()})")
+    
+    # List what's actually in the base path
+    logger.error(f"Base path contents: {list(base_path.iterdir()) if base_path.exists() else 'N/A'}")
+    
+    # Fallback to minimal template
+    return """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nanki Standalone</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+               background: #0f0f0f; color: #fff; padding: 20px; }
+        .error { background: #1a1a1a; padding: 20px; border-radius: 8px; }
+        .error h1 { color: #ef4444; }
+        .error pre { background: #0f0f0f; padding: 10px; border-radius: 4px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <div class="error">
+        <h1>⚠️ Template Not Found</h1>
+        <p>The application template could not be loaded. This is likely a packaging issue.</p>
+        <p>Please check the installation or try the standard Nanki version.</p>
+        <pre id="log">Loading...</pre>
+    </div>
+    <script>
+        document.getElementById('log').textContent += '\\nWaiting for pywebview...';
+        function waitForAPI() {
+            if (window.pywebview && window.pywebview.api) {
+                document.getElementById('log').textContent += '\\npywebview.api available!';
+                window.pywebviewReady = true;
+                window.dispatchEvent(new Event('pywebviewready'));
+            } else {
+                setTimeout(waitForAPI, 100);
+            }
+        }
+        waitForAPI();
+    </script>
+</body>
+</html>"""
+
+
 # Import all services from main app
 try:
     from noteforge_anki_studio.ai import AIService, AIConfigurationError, AIServiceError
@@ -233,8 +307,6 @@ class NankiAPI:
     def import_file(self, file_path: str) -> dict[str, Any]:
         """Import a file."""
         try:
-            # For webview, we need to handle file selection differently
-            # This is a placeholder - actual file handling is in import_file_dialog
             path = Path(file_path)
             if not path.exists():
                 return {"error": "File not found"}
@@ -293,73 +365,39 @@ class NankiAPI:
         """Get application version."""
         return "0.5.0-standalone"
 
-
-def get_html() -> str:
-    """Load the main HTML template."""
-    # In frozen mode, load from bundled assets
-    if getattr(sys, "frozen", False):
-        base_path = Path(sys._MEIPASS)
-        static_path = base_path / "static"
-    else:
-        # In development, load from source
-        base_path = Path(__file__).parent / "src" / "noteforge_anki_studio"
-        static_path = base_path / "static"
-    
-    # Load the template
-    template_path = base_path / "templates" / "index.html"
-    if template_path.exists():
-        return template_path.read_text(encoding="utf-8")
-    
-    # Fallback to minimal template
-    return """<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nanki Standalone</title>
-</head>
-<body>
-    <div id="app"></div>
-    <script>
-        // Check for pywebview API
-        function waitForAPI() {
-            if (window.pywebview && window.pywebview.api) {
-                window.pywebviewReady = true;
-                window.dispatchEvent(new Event('pywebviewready'));
-            } else {
-                setTimeout(waitForAPI, 100);
-            }
+    def get_base_path_info(self) -> dict[str, str]:
+        """Debug: Get base path info."""
+        base_path = get_base_path()
+        return {
+            "base_path": str(base_path),
+            "exists": str(base_path.exists()),
+            "contents": [str(p.name) for p in base_path.iterdir()] if base_path.exists() else [],
         }
-        waitForAPI();
-    </script>
-</body>
-</html>"""
 
 
 def main() -> int:
     """Launch the standalone Nanki app."""
     try:
         logger.info("Starting Nanki Standalone...")
+        logger.info(f"Python version: {sys.version}")
+        logger.info(f"Frozen: {getattr(sys, 'frozen', False)}")
+        logger.info(f"Base path: {get_base_path()}")
         
         # Create API instance
         api = NankiAPI()
         
         # Determine icon path
-        if getattr(sys, "frozen", False):
-            if sys.platform == "win32":
-                icon_path = Path(sys._MEIPASS) / "assets" / "nanki-icon.ico"
-            elif sys.platform == "darwin":
-                icon_path = Path(sys._MEIPASS) / "assets" / "nanki-icon.icns"
-            else:
-                icon_path = None
+        base_path = get_base_path()
+        if sys.platform == "win32":
+            icon_path = base_path / "assets" / "nanki-icon.ico"
+        elif sys.platform == "darwin":
+            icon_path = base_path / "assets" / "nanki-icon.icns"
         else:
-            base_path = Path(__file__).parent
-            if sys.platform == "win32":
-                icon_path = base_path / "assets" / "nanki-icon.ico"
-            elif sys.platform == "darwin":
-                icon_path = base_path / "assets" / "nanki-icon.icns"
-            else:
-                icon_path = None
+            icon_path = None
+        
+        if icon_path and not icon_path.exists():
+            logger.warning(f"Icon not found: {icon_path}")
+            icon_path = None
         
         # Create window
         window = webview.create_window(
