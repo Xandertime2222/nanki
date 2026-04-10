@@ -132,6 +132,7 @@ class AIService:
         task: str,
         available_models: Iterable[AIModelInfo] | None = None,
     ) -> str:
+        """Resolve the model to use for a given task."""
         ai = settings.ai
         task_lookup = {
             "chat": ai.chat_model,

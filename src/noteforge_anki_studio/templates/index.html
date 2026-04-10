@@ -2,24 +2,29 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <meta name="theme-color" content="#f4f4f5" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#09090b" media="(prefers-color-scheme: dark)" />
     <meta name="description" content="Write notes, select text, build flashcards — local-first study workspace with Anki integration." />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <title>{{ app_name }}</title>
+    <link rel="icon" type="image/svg+xml" href="/static/nanki-logo.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" />
     <link rel="stylesheet" href="/static/styles.css" />
     <link rel="stylesheet" href="/static/ai.css" />
+    <link rel="stylesheet" href="/static/polish.css" />
   </head>
   <body>
     <a href="#note-editor" class="skip-link">Skip to editor</a>
     <div id="app-shell">
-      <aside class="sidebar">
+      <aside class="sidebar" role="navigation" aria-label="Main navigation">
         <div class="sidebar-top">
           <div class="brand-row">
-            <img class="brand-logo" src="/static/nanki-logo.svg" alt="Nanki logo" />
+            <img class="brand-logo" src="/static/nanki-logo.svg" alt="" aria-hidden="true" />
             <div>
               <h1>Nanki</h1>
               <p class="muted" data-i18n="app.subtitle">Write notes. Select text. Build cards.</p>
@@ -38,17 +43,18 @@
             </div>
           </section>
 
-          <div class="search-shell card-surface">
-            <input id="note-search" type="search" placeholder="Search notes, tags, deck" data-i18n-placeholder="sidebar.searchPlaceholder" />
+          <div class="search-shell card-surface" role="search">
+            <label for="note-search" class="visually-hidden">Search notes</label>
+            <input id="note-search" type="search" placeholder="Search notes, tags, deck" data-i18n-placeholder="sidebar.searchPlaceholder" aria-label="Search notes" />
           </div>
         </div>
 
         <div class="sidebar-section grow">
           <div class="section-row">
             <span class="section-label" data-i18n="sidebar.notes">Notes</span>
-            <span id="note-count" class="muted">0</span>
+            <span id="note-count" class="muted" aria-live="polite">0</span>
           </div>
-          <div id="note-list" class="note-list"></div>
+          <div id="note-list" class="note-list" role="listbox" aria-label="Notes list"></div>
         </div>
 
         <div class="sidebar-bottom sidebar-bottom-actions">
@@ -87,12 +93,12 @@
               </div>
             </div>
 
-            <div class="header-actions header-actions-writing-first">
-              <div class="header-status">
-                <span id="save-status" class="muted">Ready</span>
-                <span id="editor-stats" class="muted">0 words</span>
-              </div>
-              <button id="theme-toggle-btn" class="ghost icon-only" type="button" aria-label="Toggle theme" title="Toggle theme">
+          <div class="header-actions header-actions-writing-first">
+            <div class="header-status" aria-live="polite">
+              <span id="save-status" class="muted">Ready</span>
+              <span id="editor-stats" class="muted">0 words</span>
+            </div>
+            <button id="theme-toggle-btn" class="ghost icon-only" type="button" aria-label="Toggle theme (Auto)" title="Toggle theme">
                 <svg id="theme-icon-auto" class="icon theme-icon" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="2.5" width="12" height="9" rx="1"/><path d="M5 14h5M7.5 11.5V14"/></svg>
                 <svg id="theme-icon-light" class="icon theme-icon hidden" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="7.5" r="2.5"/><path d="M7.5 1v1.5M7.5 12.5V14M1 7.5h1.5M12.5 7.5H14M3 3l1 1M11 11l1 1M3 12l1-1M11 4l1-1"/></svg>
                 <svg id="theme-icon-dark" class="icon theme-icon hidden" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.5 9.5A5.5 5.5 0 1 1 5.5 2.5a4.5 4.5 0 0 0 7 7z"/></svg>
@@ -112,13 +118,13 @@
                 <span class="editor-shortcut-hint muted" data-i18n="editor.shortcutHint">Use # for headings, - for lists, &gt; for quotes, and Ctrl/Cmd+B for bold.</span>
               </div>
               <div class="toolbar-group right editor-tools-side">
-                <button id="toggle-coverage-view-btn" class="ghost" type="button" data-i18n="coverage.toggleView">Show coverage in editor</button>
+                <button id="toggle-coverage-view-btn" class="ghost" type="button" data-i18n="coverage.toggleView" aria-pressed="false">Show coverage in editor</button>
               </div>
             </div>
 
             <div id="editor-shell" class="card-surface editor-shell">
-              <div id="editor-empty-state" class="editor-empty-state hidden">
-                <div class="editor-empty-panel">
+              <div id="editor-empty-state" class="editor-empty-state hidden" aria-hidden="true">
+                <div class="editor-empty-panel" role="status">
                   <span class="section-label" data-i18n="editor.emptyLabel">Blank note</span>
                   <h3 data-i18n="editor.emptyTitle">Start with your own thoughts</h3>
                   <p class="muted" data-i18n="editor.emptySubtitle">Type directly. Nanki saves Markdown in the background and lets you import files later.</p>
@@ -130,9 +136,9 @@
                 </div>
               </div>
               <div id="editor-coverage-view" class="editor-coverage-view hidden"></div>
-              <div id="note-editor" class="rich-editor prose" contenteditable="true" spellcheck="true" data-placeholder-key="editor.placeholder"></div>
+              <div id="note-editor" class="rich-editor prose" contenteditable="true" spellcheck="true" data-placeholder-key="editor.placeholder" role="textbox" aria-multiline="true" aria-label="Note editor"></div>
 
-              <div id="quick-card-dock" class="quick-card-dock hidden">
+              <div id="quick-card-dock" class="quick-card-dock hidden" role="region" aria-label="Quick card creator">
                 <div class="quick-card-head">
                   <div class="quick-card-title-group">
                     <strong data-i18n="quickCard.title">Fast card</strong>
@@ -146,11 +152,11 @@
                 <div class="quick-card-grid">
                   <label>
                     <span data-i18n="cards.front">Front / Text</span>
-                    <textarea id="quick-card-front" rows="3"></textarea>
+                    <textarea id="quick-card-front" rows="3" aria-label="Front side of card"></textarea>
                   </label>
                   <label>
                     <span data-i18n="cards.back">Back</span>
-                    <textarea id="quick-card-back" rows="3"></textarea>
+                    <textarea id="quick-card-back" rows="3" aria-label="Back side of card"></textarea>
                   </label>
                 </div>
                 <div class="quick-card-footer">
@@ -173,45 +179,45 @@
                 </div>
                 <button id="close-study-btn" class="ghost" type="button" aria-label="Close" data-i18n="common.close"><svg class="icon" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3.5 3.5l8 8M11.5 3.5l-8 8"/></svg></button>
               </div>
-              <div class="inspector-tabs">
-                <button class="inspector-tab active" data-panel="cards" data-i18n="inspector.cards">Cards</button>
-                <button class="inspector-tab" data-panel="coverage" data-i18n="inspector.coverage">Coverage</button>
-                <button class="inspector-tab" data-panel="source" data-i18n="inspector.source">Source</button>
-              </div>
+            <div class="inspector-tabs" role="tablist" aria-label="Study tools tabs">
+              <button class="inspector-tab active" data-panel="cards" data-i18n="inspector.cards" role="tab" aria-selected="true" aria-controls="cards-panel">Cards</button>
+              <button class="inspector-tab" data-panel="coverage" data-i18n="inspector.coverage" role="tab" aria-selected="false" aria-controls="coverage-panel">Coverage</button>
+              <button class="inspector-tab" data-panel="source" data-i18n="inspector.source" role="tab" aria-selected="false" aria-controls="source-panel">Source</button>
+            </div>
             </div>
 
-            <section id="cards-panel" class="inspector-panel active card-surface">
+            <section id="cards-panel" class="inspector-panel active card-surface" role="tabpanel" aria-labelledby="cards-tab">
               <div class="panel-head panel-head-cards">
                 <div>
                   <h4 data-i18n="cards.savedCards">Saved cards for note</h4>
-                  <p id="card-count" class="muted">0</p>
+                  <p id="card-count" class="muted" aria-live="polite">0</p>
                 </div>
                 <div class="button-grid compact-buttons">
                   <button id="new-card-btn" data-i18n="cards.newCard">New card</button>
                   <button id="push-all-btn" class="primary" data-i18n="cards.pushAll">Push all</button>
                 </div>
               </div>
-              <div class="export-row">
-                <button id="export-csv-btn">CSV</button>
-                <button id="export-anki-btn">Anki TXT</button>
-                <button id="export-apkg-btn">APKG</button>
+              <div class="export-row" role="group" aria-label="Export options">
+                <button id="export-csv-btn" aria-label="Export as CSV">CSV</button>
+                <button id="export-anki-btn" aria-label="Export as Anki text file">Anki TXT</button>
+                <button id="export-apkg-btn" aria-label="Export as APKG package">APKG</button>
               </div>
               <div id="cards-empty-hint" class="callout" data-i18n="cards.emptyHint">Select text in your note or imported source and use the popup to create a card instantly.</div>
-              <div id="card-list" class="card-list"></div>
+              <div id="card-list" class="card-list" role="list" aria-label="Saved cards"></div>
             </section>
 
-            <section id="coverage-panel" class="inspector-panel card-surface">
+            <section id="coverage-panel" class="inspector-panel card-surface" role="tabpanel" aria-labelledby="coverage-tab">
               <div class="panel-head">
                 <div>
                   <h4 data-i18n="coverage.title">Flashcard coverage</h4>
-                  <p id="coverage-summary-text" class="muted">No cards linked yet.</p>
+                  <p id="coverage-summary-text" class="muted" aria-live="polite">No cards linked yet.</p>
                 </div>
-                <button id="refresh-coverage-btn" data-i18n="coverage.refresh">Refresh</button>
+                <button id="refresh-coverage-btn" data-i18n="coverage.refresh" aria-label="Refresh coverage analysis">Refresh</button>
               </div>
 
-              <div class="coverage-hero">
+              <div class="coverage-hero" role="img" aria-label="Coverage progress">
                 <div id="coverage-percent" class="coverage-percent">0%</div>
-                <div class="coverage-bar"><span id="coverage-bar-fill"></span></div>
+                <div class="coverage-bar"><span id="coverage-bar-fill" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></span></div>
                 <div id="coverage-stat-pills" class="stat-pills"></div>
               </div>
 
@@ -255,11 +261,11 @@
       </main>
     </div>
 
-    <div id="selection-bubble" class="selection-bubble hidden">
-      <button id="bubble-basic-btn" class="primary" data-i18n="selection.basicCard">Basic</button>
-      <button id="bubble-cloze-btn" data-i18n="selection.clozeCard">Cloze</button>
-      <button id="bubble-front-btn" data-i18n="selection.useAsFront">To front</button>
-      <button id="bubble-back-btn" data-i18n="selection.useAsBack">To back</button>
+    <div id="selection-bubble" class="selection-bubble hidden" role="toolbar" aria-label="Text selection actions">
+      <button id="bubble-basic-btn" class="primary" data-i18n="selection.basicCard" aria-label="Create basic card">Basic</button>
+      <button id="bubble-cloze-btn" data-i18n="selection.clozeCard" aria-label="Create cloze card">Cloze</button>
+      <button id="bubble-front-btn" data-i18n="selection.useAsFront" aria-label="Add to front side">To front</button>
+      <button id="bubble-back-btn" data-i18n="selection.useAsBack" aria-label="Add to back side">To back</button>
     </div>
 
     <div id="card-drawer" class="overlay hidden">
@@ -463,7 +469,10 @@
 
     <input id="file-input" type="file" class="hidden" accept=".pdf,.txt,.md,.markdown,.pptx" />
     <datalist id="anki-decks"></datalist>
-    <div id="toast" class="toast hidden"></div>
+    <div id="toast" class="toast hidden" role="alert" aria-live="assertive"></div>
+    <div id="loading-overlay" class="loading-overlay hidden" aria-hidden="true">
+      <div class="loading-spinner" aria-label="Loading"></div>
+    </div>
 
     <script src="/static/app.js" defer></script>
     <script src="/static/ai_ui.js" defer></script>

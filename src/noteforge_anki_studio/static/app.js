@@ -39,6 +39,9 @@ const state = {
     sourceExcerpt: '',
     anchor: null,
   },
+  keyboardShortcutsEnabled: true,
+  lastActivity: Date.now(),
+  connectionStatus: 'connected',
 };
 
 const els = {};
@@ -489,29 +492,55 @@ const I18N = {
 };
 
 const fetchJson = async (url, options = {}) => {
-  const response = await fetch(url, {
-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
-    ...options,
-  });
-  if (!response.ok) {
-    let detail = `Request failed (${response.status})`;
-    try {
-      const data = await response.json();
-      detail = data.detail || detail;
-    } catch {
-      // ignore
+  const startTime = performance.now();
+  try {
+    const response = await fetch(url, {
+      headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+      ...options,
+    });
+    const elapsed = performance.now() - startTime;
+    if (elapsed > 1000) {
+      console.debug(`[Nanki] Slow API call: ${url} took ${elapsed.toFixed(0)}ms`);
     }
-    throw new Error(detail);
+    if (!response.ok) {
+      let detail = `Request failed (${response.status})`;
+      try {
+        const data = await response.json();
+        detail = data.detail || detail;
+      } catch {
+        // ignore
+      }
+      throw new Error(detail);
+    }
+    const contentType = response.headers.get('content-type') || '';
+    return contentType.includes('application/json') ? response.json() : response.text();
+  } catch (error) {
+    console.error(`[Nanki] API error: ${url}`, error);
+    throw error;
   }
-  const contentType = response.headers.get('content-type') || '';
-  return contentType.includes('application/json') ? response.json() : response.text();
 };
 
-const debounce = (fn, delay) => {
+const debounce = (fn, delay, immediate = false) => {
   let timer = null;
   return (...args) => {
+    const callNow = immediate && !timer;
     window.clearTimeout(timer);
-    timer = window.setTimeout(() => fn(...args), delay);
+    timer = window.setTimeout(() => {
+      timer = null;
+      if (!immediate) fn(...args);
+    }, delay);
+    if (callNow) fn(...args);
+  };
+};
+
+const throttle = (fn, limit) => {
+  let inThrottle = false;
+  return (...args) => {
+    if (!inThrottle) {
+      fn(...args);
+      inThrottle = true;
+      setTimeout(() => (inThrottle = false), limit);
+    }
   };
 };
 
@@ -556,6 +585,7 @@ const t = (key, values = {}) => interpolate(translationLookup(currentLanguage(),
 const emitNankiEvent = (name, detail = {}) => document.dispatchEvent(new CustomEvent(name, { detail }));
 
 const dismissToast = () => {
+  if (!els.toast) return;
   els.toast.classList.add('toast-exit');
   window.clearTimeout(showToast.timer);
   window.setTimeout(() => {
@@ -564,12 +594,33 @@ const dismissToast = () => {
   }, 180);
 };
 
-const showToast = (message, kind = 'info') => {
+const showToast = (message, kind = 'info', duration = 3200) => {
+  if (!els.toast) return;
   els.toast.textContent = message;
   els.toast.dataset.kind = kind;
   els.toast.classList.remove('hidden', 'toast-exit');
   window.clearTimeout(showToast.timer);
-  showToast.timer = window.setTimeout(dismissToast, 3200);
+  showToast.timer = window.setTimeout(dismissToast, duration);
+  
+  // Announce to screen readers
+  els.toast.setAttribute('role', 'alert');
+  els.toast.setAttribute('aria-live', 'polite');
+};
+
+const showLoading = (message = 'Loading...') => {
+  const overlay = document.getElementById('loading-overlay');
+  if (overlay) {
+    overlay.classList.remove('hidden');
+    overlay.setAttribute('aria-hidden', 'false');
+  }
+};
+
+const hideLoading = () => {
+  const overlay = document.getElementById('loading-overlay');
+  if (overlay) {
+    overlay.classList.add('hidden');
+    overlay.setAttribute('aria-hidden', 'true');
+  }
 };
 
 const setSaveStatus = (message) => {
@@ -590,7 +641,8 @@ const currentWordCount = () => (editorPlainText().match(/\b\w+\b/g) || []).lengt
 const updateEditorStats = () => {
   const words = currentWordCount();
   const chars = editorPlainText().length;
-  els.editorStats.textContent = `${words} ${t('unit.words')} · ${chars} ${t('unit.chars')}`;
+  const readTime = Math.max(1, Math.ceil(words / 200)); // Average reading speed
+  els.editorStats.textContent = `${words} ${t('unit.words')} · ${chars} ${t('unit.chars')} · ~${readTime} min read`;
 };
 
 
@@ -911,6 +963,16 @@ const applyTheme = (theme) => {
   const value = THEME_ORDER.includes(theme) ? theme : 'auto';
   state.theme = value;
   document.documentElement.setAttribute('data-theme', value);
+  
+  // Update meta theme-color for browser UI
+  const lightThemeColor = '#f4f4f5';
+  const darkThemeColor = '#09090b';
+  const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+  if (metaThemeColor) {
+    const isDark = value === 'dark' || (value === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    metaThemeColor.setAttribute('content', isDark ? darkThemeColor : lightThemeColor);
+  }
+  
   if (els.themeToggleBtn) {
     const labelKey = value === 'auto' ? 'topbar.themeAuto' : value === 'light' ? 'topbar.themeLight' : 'topbar.themeDark';
     const label = t(labelKey);
@@ -920,6 +982,9 @@ const applyTheme = (theme) => {
   if (els.themeIconAuto) els.themeIconAuto.classList.toggle('hidden', value !== 'auto');
   if (els.themeIconLight) els.themeIconLight.classList.toggle('hidden', value !== 'light');
   if (els.themeIconDark) els.themeIconDark.classList.toggle('hidden', value !== 'dark');
+  
+  // Dispatch event for other components
+  document.dispatchEvent(new CustomEvent('nanki:theme-changed', { detail: { theme: value } }));
 };
 
 const cycleTheme = () => {
@@ -927,6 +992,7 @@ const cycleTheme = () => {
   const next = THEME_ORDER[(currentIndex + 1) % THEME_ORDER.length];
   applyTheme(next);
   persistTheme(next);
+  showToast(t(next === 'auto' ? 'topbar.themeAuto' : next === 'light' ? 'topbar.themeLight' : 'topbar.themeDark'), 'info', 1500);
 };
 
 const applyTranslations = () => {
@@ -936,6 +1002,9 @@ const applyTranslations = () => {
   });
   document.querySelectorAll('[data-i18n-placeholder]').forEach((node) => {
     node.placeholder = t(node.dataset.i18nPlaceholder);
+  });
+  document.querySelectorAll('[data-i18n-title]').forEach((node) => {
+    node.title = t(node.dataset.i18nTitle);
   });
   if (els.noteEditor?.dataset.placeholderKey) {
     els.noteEditor.dataset.placeholder = t(els.noteEditor.dataset.placeholderKey);
@@ -953,6 +1022,11 @@ const applyTranslations = () => {
   renderEditorCoverageView();
   applyWorkspaceChrome();
   applyTheme(state.theme || getStoredTheme());
+  
+  // Update document title
+  document.title = state.activeNote?.meta?.title 
+    ? `${state.activeNote.meta.title} — Nanki` 
+    : 'Nanki';
 };
 
 const noteListItems = () => {
@@ -978,6 +1052,7 @@ const renderNoteList = () => {
   if (!items.length) {
     const empty = document.createElement('div');
     empty.className = 'muted';
+    empty.setAttribute('role', 'status');
     empty.textContent = t('sidebar.noNotes');
     els.noteList.appendChild(empty);
     return;
@@ -986,10 +1061,13 @@ const renderNoteList = () => {
   const searchTerm = state.searchTerm.trim().toLowerCase();
   const showSearchHighlight = searchTerm.length >= 1;
 
+  const fragment = document.createDocumentFragment();
   for (const note of items) {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = `note-item ${state.activeNoteId === note.meta.id ? 'active' : ''}`;
+    button.setAttribute('role', 'option');
+    button.setAttribute('aria-selected', state.activeNoteId === note.meta.id);
     button.innerHTML = `
       <div class="note-item-title-row">
         <strong>${showSearchHighlight ? highlightText(note.meta.title, searchTerm) : escapeHtml(note.meta.title)}</strong>
@@ -1005,8 +1083,9 @@ const renderNoteList = () => {
       </div>
     `;
     button.addEventListener('click', () => selectNote(note.meta.id).catch((error) => showToast(error.message, 'error')));
-    els.noteList.appendChild(button);
+    fragment.appendChild(button);
   }
+  els.noteList.appendChild(fragment);
 };
 
 const selectInspectorPanel = (panel) => {
@@ -1441,6 +1520,9 @@ const bindNoteMetaFields = (note) => {
   els.noteTags.value = joinTags(note.meta.tags);
   els.noteDeck.value = note.meta.default_deck || 'Default';
   els.notePinned.checked = Boolean(note.meta.pinned);
+  
+  // Update page title
+  document.title = `${note.meta.title} — Nanki`;
 };
 
 const renderEditorFromMarkdown = async (markdown) => {
@@ -1492,6 +1574,10 @@ const hydrateActiveNote = async (note, { reloadEditor = true } = {}) => {
   if (state.coverageView || (state.studyOpen && state.inspectorPanel === 'coverage')) {
     loadCoverage({ quiet: true, force: true }).catch(() => {});
   }
+  // Focus editor on desktop
+  if (window.innerWidth >= 768 && reloadEditor) {
+    setTimeout(() => els.noteEditor?.focus(), 100);
+  }
 };
 
 const serializeEditorToMarkdown = async () => {
@@ -1540,14 +1626,25 @@ const persistActiveNote = async ({ quiet = false } = {}) => {
   return state.activeNote;
 };
 
-const scheduleSave = () => {
+const scheduleSave = debounce(() => {
   if (state.editorApplying) return;
   state.dirty = true;
-  setSaveStatus(t('status.unsavedChanges'));
+  setSaveStatus(t('status.saving'));
+  persistActiveNote()
+    .then(() => {
+      setSaveStatus(t('status.loaded', { date: formatTimestamp(state.activeNote?.meta.updated_at || Date.now()) }));
+    })
+    .catch((error) => {
+      showToast(t('errors.saveCurrentNoteFailed', { message: error.message }), 'error');
+      setSaveStatus(t('status.unsavedChanges'));
+    });
+}, 850);
+
+const triggerSave = () => {
+  if (state.editorApplying) return;
+  state.dirty = true;
   window.clearTimeout(state.saveTimer);
-  state.saveTimer = window.setTimeout(() => {
-    persistActiveNote().catch((error) => showToast(error.message, 'error'));
-  }, 850);
+  persistActiveNote().catch((error) => showToast(error.message, 'error'));
 };
 
 const fetchActiveNote = async ({ reloadEditor = true } = {}) => {
@@ -1567,9 +1664,20 @@ const selectNote = async (noteId) => {
   closeDrawer({ reset: true });
   state.coverageView = false;
   resetQuickCard({ quiet: true });
-  const note = await fetchJson(`/api/notes/${noteId}`);
-  await hydrateActiveNote(note, { reloadEditor: true });
-  emitNankiEvent('nanki:note-selected', { noteId });
+  showLoading('Loading note...');
+  try {
+    const note = await fetchJson(`/api/notes/${noteId}`);
+    await hydrateActiveNote(note, { reloadEditor: true });
+    emitNankiEvent('nanki:note-selected', { noteId });
+    // Scroll to top on mobile
+    if (window.innerWidth < 768) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  } catch (error) {
+    showToast(error.message, 'error');
+  } finally {
+    hideLoading();
+  }
 };
 
 const clearWorkspaceUi = () => {
@@ -1590,63 +1698,94 @@ const clearWorkspaceUi = () => {
   renderCoveragePanel();
   renderCardList();
   setSaveStatus(t('status.ready'));
+  document.title = 'Nanki';
 };
 
 const createBlankNote = async () => {
-  const note = await fetchJson('/api/notes', {
-    method: 'POST',
-    body: JSON.stringify({ title: t('notes.untitledTitle'), tags: [], content: '', default_deck: 'Default' }),
-  });
-  state.notes.unshift({ meta: note.meta, card_count: 0, word_count: 0 });
-  await selectNote(note.meta.id);
-  window.setTimeout(() => els.noteEditor?.focus(), 40);
-  showToast(t('toast.newNoteCreated'));
+  showLoading(t('status.saving'));
+  try {
+    const note = await fetchJson('/api/notes', {
+      method: 'POST',
+      body: JSON.stringify({ title: t('notes.untitledTitle'), tags: [], content: '', default_deck: 'Default' }),
+    });
+    state.notes.unshift({ meta: note.meta, card_count: 0, word_count: 0 });
+    await selectNote(note.meta.id);
+    window.setTimeout(() => {
+      els.noteEditor?.focus();
+      hideLoading();
+    }, 40);
+    showToast(t('toast.newNoteCreated'), 'success');
+  } catch (error) {
+    hideLoading();
+    showToast(error.message, 'error');
+  }
 };
 
 const duplicateCurrentNote = async () => {
   if (!state.activeNoteId) return;
-  await persistActiveNote({ quiet: true });
-  const duplicate = await fetchJson(`/api/notes/${state.activeNoteId}/duplicate`, {
-    method: 'POST',
-    body: JSON.stringify({}),
-  });
-  state.notes.unshift({
-    meta: duplicate.meta,
-    card_count: duplicate.cards.length,
-    word_count: (duplicate.content.match(/\b\w+\b/g) || []).length,
-  });
-  await selectNote(duplicate.meta.id);
-  showToast(t('toast.noteDuplicated'));
+  showLoading('Duplicating...');
+  try {
+    await persistActiveNote({ quiet: true });
+    const duplicate = await fetchJson(`/api/notes/${state.activeNoteId}/duplicate`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+    state.notes.unshift({
+      meta: duplicate.meta,
+      card_count: duplicate.cards.length,
+      word_count: (duplicate.content.match(/\b\w+\b/g) || []).length,
+    });
+    await selectNote(duplicate.meta.id);
+    showToast(t('toast.noteDuplicated'), 'success');
+  } catch (error) {
+    showToast(error.message, 'error');
+  } finally {
+    hideLoading();
+  }
 };
 
 const deleteCurrentNote = async () => {
   if (!state.activeNoteId) return;
   if (!window.confirm(t('dialogs.deleteNoteConfirm'))) return;
-  const deletedId = state.activeNoteId;
-  await fetchJson(`/api/notes/${deletedId}`, { method: 'DELETE' });
-  state.notes = state.notes.filter((note) => note.meta.id !== deletedId);
-  state.activeNoteId = null;
-  state.activeNote = null;
-  renderNoteList();
-  closeDrawer({ reset: true });
-  if (state.notes[0]) await selectNote(state.notes[0].meta.id);
-  else clearWorkspaceUi();
-  showToast(t('toast.noteDeleted'));
+  showLoading('Deleting...');
+  try {
+    const deletedId = state.activeNoteId;
+    await fetchJson(`/api/notes/${deletedId}`, { method: 'DELETE' });
+    state.notes = state.notes.filter((note) => note.meta.id !== deletedId);
+    state.activeNoteId = null;
+    state.activeNote = null;
+    renderNoteList();
+    closeDrawer({ reset: true });
+    if (state.notes[0]) await selectNote(state.notes[0].meta.id);
+    else clearWorkspaceUi();
+    showToast(t('toast.noteDeleted'), 'success');
+  } catch (error) {
+    showToast(error.message, 'error');
+  } finally {
+    hideLoading();
+  }
 };
 
 const importFile = async (file) => {
   closeImportHubModal();
-  const formData = new FormData();
-  formData.append('file', file);
-  const response = await fetch('/api/import/file', { method: 'POST', body: formData });
-  if (!response.ok) {
-    const data = await response.json();
-    throw new Error(data.detail || 'Import failed');
+  showLoading(`Importing ${file.name}...`);
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await fetch('/api/import/file', { method: 'POST', body: formData });
+    if (!response.ok) {
+      const data = await response.json();
+      throw new Error(data.detail || 'Import failed');
+    }
+    const note = await response.json();
+    state.notes.unshift({ meta: note.meta, card_count: note.cards.length, word_count: (note.content.match(/\b\w+\b/g) || []).length });
+    await selectNote(note.meta.id);
+    showToast(t('toast.importedFile', { name: file.name }), 'success');
+  } catch (error) {
+    showToast(error.message, 'error');
+  } finally {
+    hideLoading();
   }
-  const note = await response.json();
-  state.notes.unshift({ meta: note.meta, card_count: note.cards.length, word_count: (note.content.match(/\b\w+\b/g) || []).length });
-  await selectNote(note.meta.id);
-  showToast(t('toast.importedFile', { name: file.name }));
 };
 
 const importText = async () => {
@@ -1657,23 +1796,30 @@ const importText = async () => {
     showToast(t('errors.pasteText'), 'error');
     return;
   }
-  const note = await fetchJson('/api/import/text', {
-    method: 'POST',
-    body: JSON.stringify({
-      title,
-      text,
-      tags: parseTags(els.textImportTags.value),
-      source_type: els.textImportType.value,
-      default_deck: state.activeNote?.meta.default_deck || 'Default',
-    }),
-  });
-  els.textImportTitle.value = '';
-  els.textImportTags.value = '';
-  els.textImportContent.value = '';
-  closeImportModal();
-  state.notes.unshift({ meta: note.meta, card_count: note.cards.length, word_count: (note.content.match(/\b\w+\b/g) || []).length });
-  await selectNote(note.meta.id);
-  showToast(t('toast.textImported'));
+  showLoading('Importing text...');
+  try {
+    const note = await fetchJson('/api/import/text', {
+      method: 'POST',
+      body: JSON.stringify({
+        title,
+        text,
+        tags: parseTags(els.textImportTags.value),
+        source_type: els.textImportType.value,
+        default_deck: state.activeNote?.meta.default_deck || 'Default',
+      }),
+    });
+    els.textImportTitle.value = '';
+    els.textImportTags.value = '';
+    els.textImportContent.value = '';
+    closeImportModal();
+    state.notes.unshift({ meta: note.meta, card_count: note.cards.length, word_count: (note.content.match(/\b\w+\b/g) || []).length });
+    await selectNote(note.meta.id);
+    showToast(t('toast.textImported'), 'success');
+  } catch (error) {
+    showToast(error.message, 'error');
+  } finally {
+    hideLoading();
+  }
 };
 
 const applySettingsToInputs = () => {
@@ -1699,44 +1845,129 @@ const collectSettingsPayload = () => ({
 });
 
 const saveSettings = async ({ quiet = false, reloadNotes = true } = {}) => {
-  const payload = collectSettingsPayload();
-  const workspaceChanged = payload.workspace_path !== state.settings.workspace_path;
-  state.settings = await fetchJson('/api/settings', { method: 'PUT', body: JSON.stringify(payload) });
-  applySettingsToInputs();
-  applyTranslations();
-  if (!quiet) showToast(t('toast.settingsSaved'));
-  if (reloadNotes && workspaceChanged) {
-    state.activeNoteId = null;
-    state.activeNote = null;
-    await loadNotes();
+  showLoading('Saving settings...');
+  try {
+    const payload = collectSettingsPayload();
+    const workspaceChanged = payload.workspace_path !== state.settings.workspace_path;
+    state.settings = await fetchJson('/api/settings', { method: 'PUT', body: JSON.stringify(payload) });
+    applySettingsToInputs();
+    applyTranslations();
+    if (!quiet) showToast(t('toast.settingsSaved'), 'success');
+    if (reloadNotes && workspaceChanged) {
+      state.activeNoteId = null;
+      state.activeNote = null;
+      await loadNotes();
+    }
+    emitNankiEvent('nanki:settings-changed', { source: 'save' });
+    return state.settings;
+  } catch (error) {
+    showToast(`Failed to save settings: ${error.message}`, 'error');
+    return state.settings;
+  } finally {
+    hideLoading();
   }
-  emitNankiEvent('nanki:settings-changed', { source: 'save' });
-  return state.settings;
 };
 
 const loadNotes = async () => {
-  state.notes = await fetchJson('/api/notes');
-  renderNoteList();
-  if (state.activeNoteId) {
-    const stillExists = state.notes.some((note) => note.meta.id === state.activeNoteId);
-    if (stillExists) {
-      await selectNote(state.activeNoteId);
+  showLoading('Loading notes...');
+  try {
+    state.notes = await fetchJson('/api/notes');
+    renderNoteList();
+    if (state.activeNoteId) {
+      const stillExists = state.notes.some((note) => note.meta.id === state.activeNoteId);
+      if (stillExists) {
+        await selectNote(state.activeNoteId);
+        return;
+      }
+    }
+    if (state.notes.length) {
+      await selectNote(state.notes[0].meta.id);
       return;
     }
+    clearWorkspaceUi();
+  } catch (error) {
+    showToast(`Failed to load notes: ${error.message}`, 'error');
+  } finally {
+    hideLoading();
   }
-  if (state.notes.length) {
-    await selectNote(state.notes[0].meta.id);
-    return;
-  }
-  clearWorkspaceUi();
+};
+
+// Keyboard shortcuts
+const setupKeyboardShortcuts = () => {
+  if (!state.keyboardShortcutsEnabled) return;
+  
+  document.addEventListener('keydown', (event) => {
+    const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+    const modifier = isMac ? event.metaKey : event.ctrlKey;
+    
+    // Don't trigger shortcuts when typing in inputs
+    if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
+      if (event.key === 'Escape') {
+        event.target.blur();
+        event.preventDefault();
+      }
+      return;
+    }
+    
+    if (modifier) {
+      switch (event.key.toLowerCase()) {
+        case 's':
+          event.preventDefault();
+          triggerSave();
+          break;
+        case 'n':
+          event.preventDefault();
+          createBlankNote();
+          break;
+        case 'o':
+          event.preventDefault();
+          document.getElementById('note-search')?.focus();
+          break;
+        case 'f':
+          event.preventDefault();
+          document.getElementById('note-search')?.focus();
+          break;
+        case 'b':
+          event.preventDefault();
+          document.execCommand('bold', false, null);
+          break;
+        case 'i':
+          event.preventDefault();
+          document.execCommand('italic', false, null);
+          break;
+      }
+    }
+    
+    if (event.key === 'Escape') {
+      // Close any open modals/drawers
+      document.querySelectorAll('.overlay:not(.hidden)').forEach((overlay) => {
+        overlay.classList.add('hidden');
+      });
+      hideSelectionBubble();
+    }
+  });
 };
 
 const testAnki = async () => {
-  await saveSettings({ quiet: true, reloadNotes: false });
-  const result = await fetchJson('/api/anki/test', { method: 'POST' });
-  state.decks = result.decks || [];
-  state.models = result.models || [];
-  state.ankiConnectionInfo = { ok: true, ...result };
+  showLoading('Testing Anki connection...');
+  try {
+    await saveSettings({ quiet: true, reloadNotes: false });
+    const result = await fetchJson('/api/anki/test', { method: 'POST' });
+    state.decks = result.decks || [];
+    state.models = result.models || [];
+    state.ankiConnectionInfo = { ok: true, ...result };
+    refreshDeckDataList();
+    renderAnkiStatus();
+    renderAnkiLists();
+    showToast(t('toast.ankiOk', { version: result.version, count: (result.decks || []).length }), 'success');
+  } catch (error) {
+    state.ankiConnectionInfo = { ok: false, error: error.message };
+    renderAnkiStatus();
+    showToast(t('toast.ankiOffline'), 'error');
+  } finally {
+    hideLoading();
+  }
+};
   refreshDeckDataList();
   renderAnkiStatus();
   showToast(t('toast.ankiOk', { version: result.version, count: state.decks.length }));
@@ -1760,28 +1991,25 @@ const refreshAnkiDecks = async ({ quiet = false } = {}) => {
 };
 
 const loadCoverage = async ({ quiet = false, force = false } = {}) => {
-  if (!state.activeNoteId) {
-    state.coverageReport = null;
-    state.coverageStale = false;
-    renderCoveragePanel();
-    return null;
-  }
-  if (state.coverageLoading) return state.coverageReport;
-  if (!force && state.coverageReport && !state.coverageStale) return state.coverageReport;
+  if (!state.activeNoteId) return;
+  if (!force && !state.coverageStale && state.coverageReport) return;
   state.coverageLoading = true;
-  if (els.refreshCoverageBtn) els.refreshCoverageBtn.classList.add('loading');
+  if (!quiet && els.refreshCoverageBtn) els.refreshCoverageBtn.classList.add('loading');
+  if (!quiet) showLoading('Analyzing coverage...');
   try {
     const report = await fetchJson(`/api/notes/${state.activeNoteId}/coverage`);
     state.coverageReport = report;
     state.coverageStale = false;
-    if (els.refreshCoverageBtn) els.refreshCoverageBtn.classList.remove('stale');
     renderCoveragePanel();
-    renderCardList();
-    if (state.coverageView) renderEditorCoverageView();
-    return report;
+    renderEditorCoverageView();
+    if (els.refreshCoverageBtn) els.refreshCoverageBtn.classList.remove('stale');
+    if (!quiet) showToast('Coverage analysis complete', 'success', 2000);
+  } catch (error) {
+    if (!quiet) showToast(`Coverage error: ${error.message}`, 'error');
   } finally {
     state.coverageLoading = false;
-    if (els.refreshCoverageBtn) els.refreshCoverageBtn.classList.remove('loading');
+    if (!quiet && els.refreshCoverageBtn) els.refreshCoverageBtn.classList.remove('loading');
+    if (!quiet) hideLoading();
   }
 };
 
@@ -2035,20 +2263,28 @@ const saveCardPayload = async (payload, cardId = null) => {
     showToast(t('errors.createOrOpenNoteFirst'), 'error');
     return null;
   }
-  await persistActiveNote({ quiet: true });
-  const url = cardId ? `/api/notes/${state.activeNoteId}/cards/${cardId}` : `/api/notes/${state.activeNoteId}/cards`;
-  const method = cardId ? 'PUT' : 'POST';
-  const saved = await fetchJson(url, { method, body: JSON.stringify(payload) });
-  if (state.activeNote) {
-    state.activeNote.cards = state.activeNote.cards || [];
-    const idx = state.activeNote.cards.findIndex((c) => c.id === saved.id);
-    if (idx >= 0) state.activeNote.cards[idx] = saved;
-    else state.activeNote.cards.push(saved);
-    updateNoteListEntry(state.activeNote);
-    renderCardList();
-    markCoverageStale();
+  showLoading(cardId ? 'Updating card...' : 'Saving card...');
+  try {
+    await persistActiveNote({ quiet: true });
+    const url = cardId ? `/api/notes/${state.activeNoteId}/cards/${cardId}` : `/api/notes/${state.activeNoteId}/cards`;
+    const method = cardId ? 'PUT' : 'POST';
+    const saved = await fetchJson(url, { method, body: JSON.stringify(payload) });
+    if (state.activeNote) {
+      state.activeNote.cards = state.activeNote.cards || [];
+      const idx = state.activeNote.cards.findIndex((c) => c.id === saved.id);
+      if (idx >= 0) state.activeNote.cards[idx] = saved;
+      else state.activeNote.cards.push(saved);
+      updateNoteListEntry(state.activeNote);
+      renderCardList();
+      markCoverageStale();
+    }
+    return saved;
+  } catch (error) {
+    showToast(`Failed to save card: ${error.message}`, 'error');
+    return null;
+  } finally {
+    hideLoading();
   }
-  return saved;
 };
 
 const saveDrawerCard = async ({ pushAfterSave = false } = {}) => {
@@ -2056,62 +2292,100 @@ const saveDrawerCard = async ({ pushAfterSave = false } = {}) => {
   if (!validateCardPayload(payload)) return null;
   const editingId = state.drawer.editingId;
   const saved = await saveCardPayload(payload, editingId);
-  showToast(t(editingId ? 'toast.cardUpdated' : 'toast.cardSaved'));
-  if (pushAfterSave && saved?.id) {
-    await pushCards([saved.id]);
+  if (saved) {
+    showToast(t(editingId ? 'toast.cardUpdated' : 'toast.cardSaved'), 'success');
+    if (pushAfterSave && saved?.id) {
+      await pushCards([saved.id]);
+    }
+    closeDrawer({ reset: true });
   }
-  closeDrawer({ reset: true });
   return saved;
 };
 
 const deleteCard = async (cardId) => {
-  await fetchJson(`/api/notes/${state.activeNoteId}/cards/${cardId}`, { method: 'DELETE' });
-  if (state.activeNote?.cards) {
-    state.activeNote.cards = state.activeNote.cards.filter((c) => c.id !== cardId);
-    updateNoteListEntry(state.activeNote);
+  if (!window.confirm(t('dialogs.deleteCardConfirm'))) return;
+  if (!state.activeNoteId) return;
+  showLoading('Deleting card...');
+  try {
+    await fetchJson(`/api/notes/${state.activeNoteId}/cards/${cardId}`, { method: 'DELETE' });
     renderCardList();
     markCoverageStale();
+    showToast(t('toast.cardDeleted'), 'success');
+  } catch (error) {
+    showToast(error.message, 'error');
+  } finally {
+    hideLoading();
   }
-  showToast(t('toast.cardDeleted'));
 };
 
 const deleteDrawerCard = async () => {
   if (!state.drawer.editingId) return;
   await deleteCard(state.drawer.editingId);
-  closeDrawer({ reset: true });
+  if (!state.activeNote) {
+    closeDrawer({ reset: true });
+  }
 };
 
 const quickCreateClozeFromSelection = async () => {
   if (!fillDrawerFromSelection('cloze')) return;
-  await saveDrawerCard();
+  showLoading('Creating cloze card...');
+  try {
+    await saveDrawerCard();
+  } finally {
+    hideLoading();
+  }
 };
 
 const pushCards = async (cardIds = null) => {
-  if (!state.activeNoteId) return;
-  await persistActiveNote({ quiet: true });
-  const result = await fetchJson(`/api/notes/${state.activeNoteId}/cards/push`, {
-    method: 'POST',
-    body: JSON.stringify({ card_ids: cardIds, sync_after_push: Boolean(state.settings?.auto_sync) }),
-  });
-  if (result.pushed?.length && state.activeNote?.cards) {
-    const pushedAt = new Date().toISOString();
-    const pushedSet = new Set(result.pushed.map((item) => item.card_id));
-    state.activeNote.cards = state.activeNote.cards.map((card) => (
-      pushedSet.has(card.id) ? { ...card, last_pushed_at: pushedAt } : card
-    ));
-    renderCardList();
+  if (!state.activeNoteId) {
+    showToast(t('errors.noActiveNote'), 'error');
+    return;
   }
-  if (result.pushed?.length) showToast(t('toast.pushedCards', { count: result.pushed.length }));
-  else showToast(result.skipped?.[0]?.reason || t('toast.noCardsPushed'), 'error');
+  showLoading('Pushing to Anki...');
+  try {
+    await persistActiveNote({ quiet: true });
+    const result = await fetchJson(`/api/notes/${state.activeNoteId}/cards/push`, {
+      method: 'POST',
+      body: JSON.stringify({ card_ids: cardIds, sync_after_push: Boolean(state.settings?.auto_sync) }),
+    });
+    if (result.pushed?.length && state.activeNote?.cards) {
+      const pushedAt = new Date().toISOString();
+      const pushedSet = new Set(result.pushed.map((item) => item.card_id));
+      state.activeNote.cards = state.activeNote.cards.map((card) => (
+        pushedSet.has(card.id) ? { ...card, last_pushed_at: pushedAt } : card
+      ));
+      renderCardList();
+      markCoverageStale();
+    }
+    if (result.pushed?.length) {
+      showToast(t('toast.pushedCards', { count: result.pushed.length }), 'success');
+    } else {
+      showToast(result.skipped?.[0]?.reason || t('toast.noCardsPushed'), 'warning');
+    }
+  } catch (error) {
+    showToast(`Failed to push cards: ${error.message}`, 'error');
+  } finally {
+    hideLoading();
+  }
 };
 
 const exportCards = async (kind) => {
-  if (!state.activeNoteId) return;
-  await persistActiveNote({ quiet: true });
-  const endpoint = { csv: 'csv', txt: 'anki-txt', apkg: 'apkg' }[kind];
-  const result = await fetchJson(`/api/notes/${state.activeNoteId}/cards/export/${endpoint}`, { method: 'POST' });
-  window.open(result.url, '_blank', 'noopener');
-  showToast(t('toast.exported', { filename: result.filename }));
+  if (!state.activeNoteId) {
+    showToast(t('errors.noActiveNote'), 'error');
+    return;
+  }
+  showLoading(`Exporting ${kind.toUpperCase()}...`);
+  try {
+    await persistActiveNote({ quiet: true });
+    const endpoint = { csv: 'csv', txt: 'anki-txt', apkg: 'apkg' }[kind];
+    const result = await fetchJson(`/api/notes/${state.activeNoteId}/cards/export/${endpoint}`, { method: 'POST' });
+    window.open(result.url, '_blank', 'noopener');
+    showToast(t('toast.exported', { filename: result.filename }), 'success');
+  } catch (error) {
+    showToast(`Failed to export: ${error.message}`, 'error');
+  } finally {
+    hideLoading();
+  }
 };
 
 const hideSelectionBubble = () => {
@@ -2666,8 +2940,10 @@ const mapElements = () => {
 };
 
 const init = async () => {
+  console.log('[Nanki] Initializing...');
   mapElements();
   applyTheme(getStoredTheme());
+  setupKeyboardShortcuts();
   bindEvents();
   resetDrawer();
   resetQuickCard({ quiet: true });
@@ -2691,7 +2967,19 @@ const init = async () => {
     renderAnkiStatus();
   }
   await loadNotes();
-  if (!state.notes.length) await createBlankNote();
+  if (!state.notes.length) {
+    // Don't auto-create note, let user choose
+    clearWorkspaceUi();
+  }
+  
+  // Track activity for auto-save
+  ['mousemove', 'keydown', 'touchstart'].forEach((event) => {
+    document.addEventListener(event, () => {
+      state.lastActivity = Date.now();
+    }, { passive: true });
+  });
+  
+  console.log('[Nanki] Ready!');
 };
 
 window.Nanki = {
@@ -2700,6 +2988,8 @@ window.Nanki = {
   t,
   fetchJson,
   showToast,
+  showLoading,
+  hideLoading,
   saveSettings,
   persistActiveNote,
   saveCardPayload,
@@ -2709,11 +2999,32 @@ window.Nanki = {
   openDrawerFromQuickCard,
   openStudyPanel,
   selectInspectorPanel,
+  triggerSave,
+  createBlankNote,
+  toggleStudyPanel,
+  toggleNoteDetails,
+  cycleTheme,
 };
 
 window.addEventListener('DOMContentLoaded', () => {
   init().catch((error) => {
-    console.error(error);
+    console.error('[Nanki] Init error:', error);
     showToast(error.message, 'error');
   });
+});
+
+// Warn before leaving with unsaved changes
+window.addEventListener('beforeunload', (event) => {
+  if (state.dirty) {
+    event.preventDefault();
+    event.returnValue = '';
+    return '';
+  }
+});
+
+// Handle visibility change for auto-save
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden' && state.dirty) {
+    triggerSave();
+  }
 });

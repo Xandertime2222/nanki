@@ -76,6 +76,33 @@ The app starts at `http://127.0.0.1:7788` and opens automatically in your browse
 
 ---
 
+## Development
+
+### Setup for Development
+
+```bash
+# Install development dependencies
+pip install -e ".[dev]"
+
+# Run tests
+pytest
+
+# Run linting
+ruff check .
+
+# Type checking
+mypy src/
+```
+
+### Code Quality
+
+This project uses:
+- **Ruff** for linting and formatting
+- **MyPy** for type checking
+- **Pytest** for testing
+
+---
+
 ## Usage
 
 ### Your First Note

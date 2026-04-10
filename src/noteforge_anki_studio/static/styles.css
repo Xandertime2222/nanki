@@ -2052,6 +2052,75 @@ button.loading::after {
   transform: translateX(-50%);
 }
 
+/* --- Visually Hidden (accessibility) --- */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* --- Loading Overlay --- */
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(2px);
+}
+
+.loading-overlay.hidden {
+  display: none;
+}
+
+.loading-spinner {
+  width: 48px;
+  height: 48px;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: #fff;
+  animation: spin 800ms ease-in-out infinite;
+}
+
+/* --- Reduced Motion --- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* --- High Contrast Mode --- */
+@media (prefers-contrast: high) {
+  :root {
+    --line: rgba(0, 0, 0, 0.3);
+    --line-strong: rgba(0, 0, 0, 0.5);
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    border-width: 2px;
+  }
+
+  .note-item.active,
+  .inspector-tab.active {
+    border-width: 2px;
+  }
+}
+
 /* --- Print --- */
 @media print {
   .sidebar,
@@ -2106,4 +2175,282 @@ button.loading::after {
 
 .toast:not(.hidden) {
   animation: fadeIn 200ms var(--ease);
+}
+
+/* --- Selection Bubble Improvements --- */
+.selection-bubble {
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* --- Quick Card Dock Polish --- */
+.quick-card-dock {
+  animation: slideUp 200ms var(--ease);
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* --- Better Button Hover States --- */
+button:not(.loading):not(:disabled) {
+  transition:
+    background-color 150ms var(--ease),
+    border-color 150ms var(--ease),
+    transform 100ms var(--ease),
+    box-shadow 150ms var(--ease);
+}
+
+button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+/* --- Focus Ring Improvements --- */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px var(--accent-ring);
+}
+
+/* --- Card Hover Effects --- */
+.saved-card {
+  transition:
+    transform 150ms var(--ease),
+    box-shadow 150ms var(--ease);
+}
+
+.saved-card:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+/* --- Note Item Polish --- */
+.note-item {
+  position: relative;
+}
+
+.note-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  border-radius: 3px 0 0 3px;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity 150ms var(--ease);
+}
+
+.note-item.active::before {
+  opacity: 1;
+}
+
+/* --- Coverage Token Hover --- */
+.coverage-token.covered {
+  position: relative;
+  transition: background-color 150ms var(--ease);
+}
+
+.coverage-token.covered:hover {
+  filter: brightness(1.05);
+}
+
+/* --- Import Option Card Polish --- */
+.import-option-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.import-option-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, transparent 0%, rgba(255, 255, 255, 0.05) 100%);
+  opacity: 0;
+  transition: opacity 200ms var(--ease);
+}
+
+.import-option-card:hover::after {
+  opacity: 1;
+}
+
+/* --- Toast Improvements --- */
+.toast {
+  max-width: min(90vw, 420px);
+  text-align: center;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+}
+
+/* --- Modal Panel Scrollbar --- */
+.modal-panel::-webkit-scrollbar,
+.drawer-panel::-webkit-scrollbar {
+  width: 8px;
+}
+
+.modal-panel::-webkit-scrollbar-track,
+.drawer-panel::-webkit-scrollbar-track {
+  background: var(--bg-soft);
+  border-radius: 4px;
+}
+
+.modal-panel::-webkit-scrollbar-thumb,
+.drawer-panel::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 4px;
+}
+
+.modal-panel::-webkit-scrollbar-thumb:hover,
+.drawer-panel::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+}
+
+/* --- Better Textarea Resize --- */
+textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+textarea:focus {
+  min-height: 100px;
+}
+
+/* --- Coverage Bar Animation --- */
+#coverage-bar-fill {
+  transition: width 600ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* --- Stat Pills Animation --- */
+.stat-pills .pill {
+  animation: fadeIn 300ms var(--ease) backwards;
+}
+
+.stat-pills .pill:nth-child(1) { animation-delay: 0ms; }
+.stat-pills .pill:nth-child(2) { animation-delay: 50ms; }
+.stat-pills .pill:nth-child(3) { animation-delay: 100ms; }
+.stat-pills .pill:nth-child(4) { animation-delay: 150ms; }
+.stat-pills .pill:nth-child(5) { animation-delay: 200ms; }
+.stat-pills .pill:nth-child(6) { animation-delay: 250ms; }
+
+/* --- Inspector Tab Indicator --- */
+.inspector-tab {
+  position: relative;
+}
+
+.inspector-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+/* --- Editor Placeholder Animation --- */
+.rich-editor[data-placeholder]:empty::before {
+  animation: pulse 3s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 0.4; }
+}
+
+/* --- Section Label Uppercase Spacing --- */
+.section-label {
+  letter-spacing: 0.08em;
+}
+
+/* --- Better Link Styling --- */
+a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 150ms var(--ease);
+}
+
+a:hover {
+  border-bottom-color: var(--accent);
+}
+
+/* --- Code Block Improvements --- */
+.rich-editor pre,
+.source-block pre {
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem 1rem;
+  overflow-x: auto;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+}
+
+/* --- Blockquote Improvements --- */
+.rich-editor blockquote {
+  border-left-width: 3px;
+  padding-left: 1rem;
+  margin: 0.75rem 0;
+  font-style: italic;
+}
+
+/* --- List Improvements --- */
+.rich-editor ul,
+.rich-editor ol {
+  padding-left: 1.5rem;
+}
+
+.rich-editor li {
+  margin: 0.35rem 0;
+}
+
+/* --- Heading Spacing --- */
+.rich-editor h1,
+.rich-editor h2,
+.rich-editor h3,
+.rich-editor h4 {
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+}
+
+.rich-editor h1 { margin-top: 0; }
+
+/* --- Table Styling --- */
+.rich-editor table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.75rem 0;
+  font-size: 0.875rem;
+}
+
+.rich-editor th,
+.rich-editor td {
+  border: 1px solid var(--line);
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+}
+
+.rich-editor th {
+  background: var(--bg-soft);
+  font-weight: 600;
+}
+
+.rich-editor tr:nth-child(even) {
+  background: var(--bg-soft);
+}
 }

@@ -12,16 +12,13 @@ import fitz
 from fastapi import UploadFile
 
 from .models import SourceItem, SourceManifest
+from .storage import utc_now_iso
 
 SupportedImportType = Literal["md", "markdown", "txt", "pdf", "pptx"]
 
 
 class UnsupportedImportError(Exception):
     pass
-
-
-def utc_now_iso() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
 A_NS = {"a": "http://schemas.openxmlformats.org/drawingml/2006/main"}
@@ -43,7 +40,9 @@ class ImportService:
             return suffix  # type: ignore[return-value]
         raise UnsupportedImportError(f"Unsupported file type: {suffix or 'unknown'}")
 
-    async def import_upload(self, upload: UploadFile) -> tuple[str, str, SourceManifest, bytes]:
+    async def import_upload(
+        self, upload: UploadFile
+    ) -> tuple[str, str, SourceManifest, bytes]:
         data = await upload.read()
         kind = self.detect_type(upload.filename or "upload")
         return self.import_bytes(upload.filename or "upload", data, kind)
@@ -57,7 +56,9 @@ class ImportService:
         data = text.encode("utf-8")
         manifest = SourceManifest(
             source_type=source_type if source_type in {"text", "markdown"} else "text",
-            original_filename=f"{title}.md" if source_type == "markdown" else f"{title}.txt",
+            original_filename=f"{title}.md"
+            if source_type == "markdown"
+            else f"{title}.txt",
             items=[SourceItem(index=1, label="Text", text=text)],
             imported_at=utc_now_iso(),
             summary=f"Imported 1 text block from {title}.",
@@ -103,7 +104,9 @@ class ImportService:
             case _:
                 raise UnsupportedImportError(filename)
 
-    def import_pdf(self, filename: str, data: bytes) -> tuple[str, str, SourceManifest, bytes]:
+    def import_pdf(
+        self, filename: str, data: bytes
+    ) -> tuple[str, str, SourceManifest, bytes]:
         title = self.title_from_filename(filename)
         items: list[SourceItem] = []
         doc = fitz.open(stream=data, filetype="pdf")
@@ -113,7 +116,13 @@ class ImportService:
                 text = "[No extractable text found on this page.]"
             items.append(SourceItem(index=index, label=f"Page {index}", text=text))
         if not items:
-            items.append(SourceItem(index=1, label="Page 1", text="[No extractable text found in this PDF.]"))
+            items.append(
+                SourceItem(
+                    index=1,
+                    label="Page 1",
+                    text="[No extractable text found in this PDF.]",
+                )
+            )
         content_parts = [f"# {title}", "", f"> Imported from PDF: `{filename}`", ""]
         for item in items:
             content_parts.extend([f"## {item.label}", "", item.text, ""])
@@ -126,7 +135,9 @@ class ImportService:
         )
         return title, "\n".join(content_parts).strip() + "\n", manifest, data
 
-    def import_pptx(self, filename: str, data: bytes) -> tuple[str, str, SourceManifest, bytes]:
+    def import_pptx(
+        self, filename: str, data: bytes
+    ) -> tuple[str, str, SourceManifest, bytes]:
         title = self.title_from_filename(filename)
         items: list[SourceItem] = []
         with zipfile.ZipFile(io.BytesIO(data)) as archive:
@@ -138,11 +149,27 @@ class ImportService:
             for index, slide_name in enumerate(slide_names, start=1):
                 xml = archive.read(slide_name)
                 root = ET.fromstring(xml)
-                texts = [node.text.strip() for node in root.findall(".//a:t", A_NS) if node.text and node.text.strip()]
-                slide_text = "\n".join(texts) if texts else "[No extractable text found on this slide.]"
-                items.append(SourceItem(index=index, label=f"Slide {index}", text=slide_text))
+                texts = [
+                    node.text.strip()
+                    for node in root.findall(".//a:t", A_NS)
+                    if node.text and node.text.strip()
+                ]
+                slide_text = (
+                    "\n".join(texts)
+                    if texts
+                    else "[No extractable text found on this slide.]"
+                )
+                items.append(
+                    SourceItem(index=index, label=f"Slide {index}", text=slide_text)
+                )
         if not items:
-            items.append(SourceItem(index=1, label="Slide 1", text="[No extractable text found in this presentation.]"))
+            items.append(
+                SourceItem(
+                    index=1,
+                    label="Slide 1",
+                    text="[No extractable text found in this presentation.]",
+                )
+            )
         content_parts = [f"# {title}", "", f"> Imported from slides: `{filename}`", ""]
         for item in items:
             content_parts.extend([f"## {item.label}", "", item.text, ""])

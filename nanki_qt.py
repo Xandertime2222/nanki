@@ -3,32 +3,64 @@
 This is a test implementation showing how a fully native Qt desktop app would look.
 It provides a native UI without web technologies.
 """
+
+from __future__ import annotations
+
 import sys
-from pathlib import Path
-from PyQt6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QSplitter, QTextEdit, QListWidget, QListWidgetItem, QPushButton,
-    QLabel, QTabWidget, QLineEdit, QTextBrowser, QComboBox, QMenu,
-    QMenuBar, QToolBar, QStatusBar, QMessageBox, QFileDialog,
-    QScrollArea, QFrame, QGroupBox, QFormLayout, QSpinBox, QCheckBox,
-    QProgressBar, QStackedWidget, QToolButton, QSizePolicy
-)
-from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal
-from PyQt6.QtGui import QFont, QAction, QIcon, QKeySequence, QShortcut, QTextCursor
+
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QAction, QFont
 from PyQt6.QtWebEngineWidgets import QWebEngineView
+from PyQt6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QFileDialog,
+    QFormLayout,
+    QFrame,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QMainWindow,
+    QMenu,
+    QMenuBar,
+    QMessageBox,
+    QProgressBar,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QSpinBox,
+    QSplitter,
+    QStackedWidget,
+    QStatusBar,
+    QTabWidget,
+    QTextBrowser,
+    QTextEdit,
+    QToolBar,
+    QToolButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 
 class NoteEditor(QWidget):
     """Markdown note editor panel."""
-    
-    def __init__(self):
+
+    def __init__(self) -> None:
         super().__init__()
+        self.editor: QTextEdit
+        self.save_btn: QPushButton
+        self.new_btn: QPushButton
+        self.pin_btn: QPushButton
+        self.status_label: QLabel
         self.init_ui()
-    
-    def init_ui(self):
+
+    def init_ui(self) -> None:
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        
+
         # Toolbar
         toolbar = QHBoxLayout()
         self.save_btn = QPushButton("💾 Speichern")
@@ -38,44 +70,53 @@ class NoteEditor(QWidget):
         toolbar.addWidget(self.save_btn)
         toolbar.addWidget(self.pin_btn)
         toolbar.addStretch()
-        
+
         # Editor
         self.editor = QTextEdit()
-        self.editor.setPlaceholderText("Schreibe deine Notiz hier...\n\nMarkdown wird unterstützt:\n# Überschrift\n**fett**\n*kursiv*\n- Liste")
+        self.editor.setPlaceholderText(
+            "Schreibe deine Notiz hier...\n\nMarkdown wird unterstützt:\n# Überschrift\n**fett**\n*kursiv*\n- Liste"
+        )
         self.editor.setFont(QFont("Consolas", 11))
         self.editor.setAcceptRichText(False)
-        
+
         # Status
         self.status_label = QLabel("Keine Notiz geladen")
         self.status_label.setStyleSheet("color: #666; padding: 4px;")
-        
+
         layout.addLayout(toolbar)
         layout.addWidget(self.editor, 1)
         layout.addWidget(self.status_label)
-    
-    def set_content(self, content: str, title: str = ""):
+
+    def set_content(self, content: str, title: str = "") -> None:
         self.editor.setPlainText(content)
         self.status_label.setText(title or "Notiz geladen")
-    
+
     def get_content(self) -> str:
         return self.editor.toPlainText()
 
 
 class CardPanel(QWidget):
     """Flashcard management panel."""
-    
-    def __init__(self):
+
+    def __init__(self) -> None:
         super().__init__()
+        self.card_list: QListWidget
+        self.front_edit: QTextEdit
+        self.back_edit: QTextEdit
+        self.deck_combo: QComboBox
+        self.tags_edit: QLineEdit
+        self.add_btn: QPushButton
+        self.push_btn: QPushButton
         self.init_ui()
-    
-    def init_ui(self):
+
+    def init_ui(self) -> None:
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        
+
         # Card list
         self.card_list = QListWidget()
         self.card_list.setPlaceholderText("Keine Karten")
-        
+
         # Card editor
         card_form = QFormLayout()
         self.front_edit = QTextEdit()
@@ -84,27 +125,29 @@ class CardPanel(QWidget):
         self.back_edit = QTextEdit()
         self.back_edit.setPlaceholderText("Rückseite (Antwort)")
         self.back_edit.setMaximumHeight(100)
-        
+
         self.deck_combo = QComboBox()
         self.deck_combo.addItem("Default")
         self.deck_combo.addItem("Neues Deck...")
-        
+
         self.tags_edit = QLineEdit()
         self.tags_edit.setPlaceholderText("tag1, tag2, tag3")
-        
+
         card_form.addRow("Vorderseite:", self.front_edit)
         card_form.addRow("Rückseite:", self.back_edit)
         card_form.addRow("Deck:", self.deck_combo)
         card_form.addRow("Tags:", self.tags_edit)
-        
+
         # Buttons
         btn_layout = QHBoxLayout()
         self.add_btn = QPushButton("+ Neue Karte")
         self.push_btn = QPushButton("📤 Zu Anki")
-        self.push_btn.setStyleSheet("background-color: #7c6bf2; color: white; padding: 8px;")
+        self.push_btn.setStyleSheet(
+            "background-color: #7c6bf2; color: white; padding: 8px;"
+        )
         btn_layout.addWidget(self.add_btn)
         btn_layout.addWidget(self.push_btn)
-        
+
         layout.addWidget(QLabel("📚 Lernkarten"))
         layout.addWidget(self.card_list, 1)
         layout.addLayout(card_form)
@@ -113,18 +156,22 @@ class CardPanel(QWidget):
 
 class AIPanel(QWidget):
     """AI chat and generation panel."""
-    
-    def __init__(self):
+
+    def __init__(self) -> None:
         super().__init__()
+        self.chat_display: QTextBrowser
+        self.chat_input: QLineEdit
+        self.count_spin: QSpinBox
+        self.gen_btn: QPushButton
         self.init_ui()
-    
-    def init_ui(self):
+
+    def init_ui(self) -> None:
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        
+
         # Tabs
         tabs = QTabWidget()
-        
+
         # Chat tab
         chat_widget = QWidget()
         chat_layout = QVBoxLayout(chat_widget)
@@ -141,7 +188,7 @@ class AIPanel(QWidget):
         chat_layout.addWidget(self.chat_display, 1)
         chat_layout.addLayout(chat_btns)
         tabs.addTab(chat_widget, "💬 Chat")
-        
+
         # Generate tab
         gen_widget = QWidget()
         gen_layout = QVBoxLayout(gen_widget)
@@ -152,14 +199,16 @@ class AIPanel(QWidget):
         gen_layout.addWidget(QLabel("Anzahl Karten:"))
         gen_layout.addWidget(self.count_spin)
         self.gen_btn = QPushButton("🤖 Generieren")
-        self.gen_btn.setStyleSheet("background-color: #7c6bf2; color: white; padding: 10px;")
+        self.gen_btn.setStyleSheet(
+            "background-color: #7c6bf2; color: white; padding: 10px;"
+        )
         gen_layout.addWidget(self.gen_btn)
         gen_layout.addStretch()
         tabs.addTab(gen_widget, "⚡ Generieren")
-        
+
         layout.addWidget(tabs)
-    
-    def send_chat(self):
+
+    def send_chat(self) -> None:
         text = self.chat_input.text()
         if text:
             self.chat_display.append(f"<b>Du:</b> {text}")
@@ -169,21 +218,27 @@ class AIPanel(QWidget):
 
 class CoveragePanel(QWidget):
     """Coverage analysis panel."""
-    
-    def __init__(self):
+
+    def __init__(self) -> None:
         super().__init__()
+        self.progress: QProgressBar
+        self.total_cards: QLabel
+        self.covered_sections: QLabel
+        self.gaps: QLabel
+        self.sync_btn: QPushButton
+        self.analyze_btn: QPushButton
         self.init_ui()
-    
-    def init_ui(self):
+
+    def init_ui(self) -> None:
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        
+
         # Progress bar
         self.progress = QProgressBar()
         self.progress.setValue(0)
         self.progress.setTextVisible(True)
         self.progress.setFormat("%p% abgedeckt")
-        
+
         # Stats
         stats = QGridLayout()
         self.total_cards = QLabel("0")
@@ -195,11 +250,11 @@ class CoveragePanel(QWidget):
         stats.addWidget(self.covered_sections, 1, 1)
         stats.addWidget(QLabel("Lücken:"), 2, 0)
         stats.addWidget(self.gaps, 2, 1)
-        
+
         # Actions
         self.sync_btn = QPushButton("🔄 Mit Anki synchronisieren")
         self.analyze_btn = QPushButton("📊 Analysieren")
-        
+
         layout.addWidget(QLabel("📊 Coverage-Analyse"))
         layout.addWidget(self.progress)
         layout.addLayout(stats)
@@ -210,79 +265,83 @@ class CoveragePanel(QWidget):
 
 class MainWindow(QMainWindow):
     """Main Nanki window."""
-    
-    def __init__(self):
+
+    def __init__(self) -> None:
         super().__init__()
+        self.note_list: QListWidget
+        self.editor: NoteEditor
+        self.cards: CardPanel
+        self.ai: AIPanel
+        self.coverage: CoveragePanel
         self.setWindowTitle("Nanki - Study Workspace")
         self.setMinimumSize(1200, 800)
         self.init_ui()
-    
-    def init_ui(self):
+
+    def init_ui(self) -> None:
         # Central widget
         central = QWidget()
         self.setCentralWidget(central)
         layout = QHBoxLayout(central)
-        
+
         # Left sidebar - Note list
         sidebar = QWidget()
         sidebar.setMaximumWidth(250)
         sidebar.setMinimumWidth(180)
         sidebar_layout = QVBoxLayout(sidebar)
         sidebar_layout.setContentsMargins(0, 0, 0, 0)
-        
+
         self.note_list = QListWidget()
         self.note_list.addItem(QListWidgetItem("📖 Erste Schritte"))
         self.note_list.addItem(QListWidgetItem("📝 Projektideen"))
         self.note_list.addItem(QListListItem("🔬 Forschung"))
-        
+
         new_note_btn = QPushButton("+ Neue Notiz")
         new_note_btn.setStyleSheet("background-color: #7c6bf2; color: white;")
-        
+
         sidebar_layout.addWidget(QLabel("📝 Notizen"))
         sidebar_layout.addWidget(self.note_list, 1)
         sidebar_layout.addWidget(new_note_btn)
-        
+
         # Main splitter
         main_splitter = QSplitter(Qt.Orientation.Horizontal)
-        
+
         # Note editor
         self.editor = NoteEditor()
-        
+
         # Right panel - Tabs
         right_tabs = QTabWidget()
         right_tabs.setMaximumWidth(400)
         right_tabs.setMinimumWidth(300)
-        
+
         self.cards = CardPanel()
         self.ai = AIPanel()
         self.coverage = CoveragePanel()
-        
+
         right_tabs.addTab(self.cards, "📚 Karten")
         right_tabs.addTab(self.ai, "🤖 KI")
         right_tabs.addTab(self.coverage, "📊 Coverage")
-        
+
         main_splitter.addWidget(self.editor)
         main_splitter.addWidget(right_tabs)
         main_splitter.setSizes([700, 400])
-        
+
         layout.addWidget(sidebar)
         layout.addWidget(main_splitter, 1)
-        
+
         # Menu bar
         self.create_menus()
-        
+
         # Toolbar
         self.create_toolbar()
-        
+
         # Status bar
         self.statusBar().showMessage("Bereit")
-        
-        # Apply dark theme
+
         self.apply_style()
-    
-    def create_menus(self):
+
+    def create_menus(self) -> None:
         menubar = self.menuBar()
-        
+
         # File menu
         file_menu = menubar.addMenu("&Datei")
         file_menu.addAction(QAction("Neue Notiz", self, shortcut="Ctrl+N"))
@@ -292,7 +351,7 @@ class MainWindow(QMainWindow):
         file_menu.addAction(QAction("Importieren...", self))
         file_menu.addSeparator()
         file_menu.addAction(QAction("Beenden", self, shortcut="Ctrl+Q"))
-        
+
         # Edit menu
         edit_menu = menubar.addMenu("&Bearbeiten")
         edit_menu.addAction(QAction("Rückgängig", self, shortcut="Ctrl+Z"))
@@ -301,32 +360,32 @@ class MainWindow(QMainWindow):
         edit_menu.addAction(QAction("Ausschneiden", self, shortcut="Ctrl+X"))
         edit_menu.addAction(QAction("Kopieren", self, shortcut="Ctrl+C"))
         edit_menu.addAction(QAction("Einfügen", self, shortcut="Ctrl+V"))
-        
+
         # Anki menu
         anki_menu = menubar.addMenu("&Anki")
         anki_menu.addAction(QAction("Zu Anki pushen", self))
         anki_menu.addAction(QAction("Mit Anki synchronisieren", self))
         anki_menu.addAction(QAction("Decks verwalten...", self))
-        
+
         # AI menu
         ai_menu = menubar.addMenu("KI")
         ai_menu.addAction(QAction("Karten generieren", self))
         ai_menu.addAction(QAction("Text erklären", self))
         ai_menu.addSeparator()
         ai_menu.addAction(QAction("KI-Einstellungen...", self))
-        
+
         # Help menu
         help_menu = menubar.addMenu("&Hilfe")
         help_menu.addAction(QAction("Dokumentation", self))
         help_menu.addAction(QAction("Wiki", self))
         help_menu.addSeparator()
         help_menu.addAction(QAction("Über Nanki", self))
-    
-    def create_toolbar(self):
+
+    def create_toolbar(self) -> None:
         toolbar = QToolBar()
         toolbar.setMovable(False)
         self.addToolBar(toolbar)
-        
+
         toolbar.addAction("📄 Neu")
         toolbar.addAction("💾 Speichern")
         toolbar.addSeparator()
@@ -334,8 +393,8 @@ class MainWindow(QMainWindow):
         toolbar.addAction("🤖 KI")
         toolbar.addSeparator()
         toolbar.addAction("⚙️ Einstellungen")
-    
-    def apply_style(self):
+
+    def apply_style(self) -> None:
         """Apply dark theme."""
         self.setStyleSheet("""
             QMainWindow {
@@ -435,15 +494,15 @@ class MainWindow(QMainWindow):
         """)
 
 
-def main():
+def main() -> None:
     """Launch the PyQt desktop application."""
     app = QApplication(sys.argv)
     app.setApplicationName("Nanki")
     app.setApplicationDisplayName("Nanki - Study Workspace")
-    
+
     window = MainWindow()
     window.show()
-    
+
     sys.exit(app.exec())
 
 

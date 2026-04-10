@@ -24,6 +24,17 @@ dependencies = [
   "pywebview>=5.0",
 ]
 
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.15.0",
+  "mypy>=1.10.0",
+  "pre-commit>=3.0",
+  "build>=1.0",
+  "types-PyYAML",
+  "types-markdown",
+]
+
 [project.scripts]
 nanki = "noteforge_anki_studio.__main__:main"
 noteforge-anki-studio = "noteforge_anki_studio.__main__:main"
@@ -37,3 +48,28 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 noteforge_anki_studio = ["templates/*.html", "static/*"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+extend-exclude = ["__pycache__", "*.egg-info"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W", "F", "I", "N", "UP", "B", "C4", "SIM", "ARG", "G",
+]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

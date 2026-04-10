@@ -3,21 +3,19 @@
 This wrapper script provides dummy streams for windowed mode and launches
 the app in a native desktop window using pywebview.
 """
-import sys
-import os
-import io
 
-# Fix for PyInstaller --windowed mode: uvicorn tries to check if stdout is a tty,
-# but in windowed mode stdout is None. We provide a dummy stream.
+from __future__ import annotations
+
+import io
+import sys
+
 if sys.stdout is None:
     sys.stdout = io.StringIO()
 if sys.stderr is None:
     sys.stderr = io.StringIO()
 
-# Ensure the package is importable
-if getattr(sys, 'frozen', False):
-    bundle_dir = sys._MEIPASS
-    sys.path.insert(0, bundle_dir)
+if getattr(sys, "frozen", False):
+    sys.path.insert(0, sys._MEIPASS)
 
 from noteforge_anki_studio.__main__ import main
 

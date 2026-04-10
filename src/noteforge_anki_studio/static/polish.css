@@ -1,0 +1,439 @@
+/* =============================================
+   NANKI — Additional Polish & Micro-interactions
+   ============================================= */
+
+/* --- Smooth Scroll Behavior --- */
+html {
+  scroll-behavior: smooth;
+}
+
+/* --- Page Load Animation --- */
+body {
+  animation: pageFadeIn 400ms var(--ease) backwards;
+}
+
+@keyframes pageFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* --- Button Ripple Effect --- */
+button {
+  position: relative;
+  overflow: hidden;
+}
+
+button::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle, rgba(255,255,255,0.3) 0%, transparent 70%);
+  transform: scale(0);
+  opacity: 0;
+  transition: transform 0.5s, opacity 0.3s;
+}
+
+button:active::after {
+  transform: scale(2);
+  opacity: 1;
+  transition: 0s;
+}
+
+/* --- Input Focus Glow --- */
+input:focus,
+textarea:focus,
+select:focus {
+  box-shadow:
+    0 0 0 3px var(--accent-ring),
+    0 2px 8px rgba(99, 102, 241, 0.15);
+}
+
+/* --- Card Hover Lift --- */
+.saved-card,
+.note-item,
+.import-option-card {
+  transition:
+    transform 200ms var(--ease),
+    box-shadow 200ms var(--ease),
+    background-color 150ms var(--ease);
+}
+
+.saved-card:hover,
+.note-item:hover,
+.import-option-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+/* --- Loading Skeleton Animation --- */
+@keyframes shimmer {
+  0% { background-position: -200px 0; }
+  100% { background-position: calc(200px + 100%) 0; }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--bg-soft) 0%,
+    var(--bg-hover) 50%,
+    var(--bg-soft) 100%
+  );
+  background-size: 200px 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: var(--radius-sm);
+}
+
+/* --- Toast Stack --- */
+#toast {
+  max-width: min(90vw, 480px);
+  word-wrap: break-word;
+  white-space: pre-wrap;
+  text-align: center;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* --- Progress Bar Animation --- */
+.coverage-bar > span {
+  position: relative;
+  overflow: hidden;
+}
+
+.coverage-bar > span::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.2),
+    transparent
+  );
+  animation: progressShimmer 2s infinite;
+}
+
+@keyframes progressShimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* --- Fade In Up Animation --- */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.inspector-panel.active,
+.modal-panel,
+.drawer-panel {
+  animation: fadeInUp 300ms var(--ease) backwards;
+}
+
+/* --- Scale In Animation --- */
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.selection-bubble:not(.hidden) {
+  animation: scaleIn 200ms var(--ease);
+}
+
+/* --- Badge Pulse for New Items --- */
+@keyframes badgePulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+.tag.success,
+.pill.success {
+  animation: badgePulse 2s ease-in-out infinite;
+}
+
+/* --- Text Selection Styling --- */
+::selection {
+  background: var(--accent);
+  color: var(--primary-contrast);
+}
+
+::-moz-selection {
+  background: var(--accent);
+  color: var(--primary-contrast);
+}
+
+/* --- Smooth Transitions for Theme Change --- */
+body,
+.card-surface,
+button,
+input,
+textarea,
+select {
+  transition:
+    background-color 200ms var(--ease),
+    color 200ms var(--ease),
+    border-color 200ms var(--ease);
+}
+
+/* --- Editor Placeholder Pulse --- */
+.rich-editor[data-placeholder]:empty::before {
+  animation: placeholderPulse 3s ease-in-out infinite;
+}
+
+@keyframes placeholderPulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 0.7; }
+}
+
+/* --- Scroll Indicator --- */
+.sidebar-section::-webkit-scrollbar-track,
+.note-list::-webkit-scrollbar-track,
+.card-list::-webkit-scrollbar-track {
+  background: var(--bg-soft);
+  border-radius: 4px;
+}
+
+.sidebar-section::-webkit-scrollbar-thumb,
+.note-list::-webkit-scrollbar-thumb,
+.card-list::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 4px;
+}
+
+.sidebar-section::-webkit-scrollbar-thumb:hover,
+.note-list::-webkit-scrollbar-thumb:hover,
+.card-list::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+}
+
+/* --- Tab Underline Animation --- */
+.inspector-tab {
+  position: relative;
+}
+
+.inspector-tab::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%) scaleX(0);
+  width: 80%;
+  height: 2px;
+  background: var(--accent);
+  transition: transform 200ms var(--ease);
+}
+
+.inspector-tab.active::after {
+  transform: translateX(-50%) scaleX(1);
+}
+
+/* --- Coverage Token Pop --- */
+.coverage-token.covered:hover {
+  animation: tokenPop 200ms var(--ease);
+}
+
+@keyframes tokenPop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+  100% { transform: scale(1); }
+}
+
+/* --- Empty State Illustration --- */
+.editor-empty-panel {
+  position: relative;
+}
+
+.editor-empty-panel::before {
+  content: '📝';
+  font-size: 3rem;
+  display: block;
+  text-align: center;
+  margin-bottom: 0.5rem;
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+/* --- Quick Card Dock Slide Up --- */
+.quick-card-dock:not(.hidden) {
+  animation: slideUpFade 250ms var(--ease);
+}
+
+@keyframes slideUpFade {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* --- Modal Backdrop Blur --- */
+.overlay-backdrop {
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+/* --- Stat Counter Animation --- */
+@keyframes countUp {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+#note-count,
+#card-count,
+.coverage-percent {
+  animation: countUp 300ms var(--ease) backwards;
+}
+
+/* --- Link Hover Underline --- */
+a {
+  position: relative;
+}
+
+a::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  width: 0;
+  height: 1px;
+  background: currentColor;
+  transition: width 200ms var(--ease);
+}
+
+a:hover::after {
+  width: 100%;
+}
+
+/* --- Print Styles --- */
+@media print {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+  
+  body {
+    background: white;
+    color: black;
+  }
+}
+
+/* --- Reduced Motion --- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* --- High Contrast Mode --- */
+@media (prefers-contrast: high) {
+  :root {
+    --line: rgba(0, 0, 0, 0.4);
+    --line-strong: rgba(0, 0, 0, 0.6);
+  }
+  
+  button,
+  input,
+  textarea,
+  select {
+    border-width: 2px;
+  }
+  
+  .note-item.active,
+  .inspector-tab.active {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+}
+
+/* --- Dark Mode Specific --- */
+:root[data-theme="dark"] .coverage-token.covered.local {
+  box-shadow: inset 0 0 0 1px rgba(74, 222, 128, 0.3);
+}
+
+:root[data-theme="dark"] .coverage-token.covered.anki {
+  box-shadow: inset 0 0 0 1px rgba(129, 140, 248, 0.3);
+}
+
+/* --- Mobile Optimizations --- */
+@media (max-width: 768px) {
+  .quick-card-dock {
+    left: 0.5rem;
+    right: 0.5rem;
+    bottom: 0.5rem;
+  }
+  
+  .selection-bubble {
+    max-width: calc(100vw - 1rem);
+  }
+  
+  button {
+    min-height: 44px; /* Touch target size */
+  }
+}
+
+/* --- Accessibility: Focus Visible --- */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+button:focus-visible,
+.note-item:focus-visible {
+  box-shadow: 0 0 0 4px var(--accent-ring);
+}
+
+/* --- Loading Spinner --- */
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: #fff;
+  animation: spin 800ms ease-in-out infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* --- Success Checkmark --- */
+@keyframes checkmark {
+  0% { stroke-dashoffset: 100; }
+  100% { stroke-dashoffset: 0; }
+}
+
+/* --- Error Shake --- */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
+.toast[data-kind="error"] {
+  animation: shake 400ms var(--ease);
+}
