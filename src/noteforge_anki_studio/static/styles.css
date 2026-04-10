@@ -2069,15 +2069,22 @@ button.loading::after {
 .loading-overlay {
   position: fixed;
   inset: 0;
-  z-index: 100;
-  display: grid;
+  z-index: 9999;
+  display: none;
+  grid-template-columns: 1fr;
   place-items: center;
   background: rgba(0, 0, 0, 0.3);
   backdrop-filter: blur(2px);
+  pointer-events: all;
+}
+
+.loading-overlay:not(.hidden) {
+  display: grid;
 }
 
 .loading-overlay.hidden {
-  display: none;
+  display: none !important;
+  pointer-events: none !important;
 }
 
 .loading-spinner {
