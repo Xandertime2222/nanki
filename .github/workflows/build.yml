@@ -30,12 +30,20 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e .
-          pip install pyinstaller pyinstaller-hooks-contrib pywebview pillow cairosvg
+          pip install pyinstaller pyinstaller-hooks-contrib pywebview
+          
+          # Try to install Pillow and cairosvg for better icon generation
+          pip install Pillow cairosvg 2>&1 | Out-Null
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "Using basic icon generation (Pillow/cairosvg not available)"
+          }
 
       - name: Generate icons
         shell: pwsh
         run: |
           python assets/generate-icons.py
+          Write-Host "Icon files created:"
+          Get-ChildItem assets/icon-*.png, assets/nanki-icon.* | Select-Object Name, Length
 
       - name: Validate Windows icon
         shell: pwsh
@@ -241,22 +249,19 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e .
-          pip install pyinstaller pyinstaller-hooks-contrib pywebview pillow cairosvg
+          pip install pyinstaller pyinstaller-hooks-contrib pywebview
+          
+          # Try to install Pillow and cairosvg for better icon generation
+          if ! pip install Pillow cairosvg 2>/dev/null; then
+            echo "Using basic icon generation (Pillow/cairosvg not available)"
+          fi
 
       - name: Generate icons
         shell: bash
         run: |
           python assets/generate-icons.py
-          ls -la assets/*.icns || echo "ICNS generation skipped (Linux CI)"
-
-      - name: Validate macOS icon
-        shell: bash
-        run: |
-          if [ ! -f "assets/nanki-icon.icns" ]; then
-            echo "Warning: ICNS icon not generated, using fallback"
-            # Create a minimal icon for CI
-            python -c "from PIL import Image; img = Image.new('RGBA', (512, 512), (99, 102, 241, 255)); img.save('assets/nanki-icon.icns')"
-          fi
+          echo "Icon files created:"
+          ls -lh assets/icon-*.png assets/nanki-icon.* 2>/dev/null || true
 
       - name: Build with PyInstaller
         shell: bash

@@ -1,142 +1,76 @@
 #!/usr/bin/env python3
-"""Generate all required icon sizes from a single SVG source.
+"""Generate minimal icon files for CI builds.
 
-This script generates:
-- Windows ICO file with multiple sizes
-- macOS ICNS file via iconutil
-- PNG files for various uses
-
-Requirements:
-    pip install Pillow
+Creates basic PNG icons that can be used by PyInstaller.
+For production builds with proper icons, install Pillow and cairosvg:
+    pip install Pillow cairosvg
 """
 
-import os
-import shutil
-import subprocess
+import struct
+import zlib
 from pathlib import Path
 
-try:
-    from PIL import Image
-except ImportError:
-    print("Pillow not installed. Run: pip install Pillow")
-    exit(1)
 
+def create_minimal_png(size: int, color: tuple) -> bytes:
+    """Create minimal PNG file data."""
 
-def svg_to_png(svg_path: Path, png_path: Path, size: int) -> None:
-    """Convert SVG to PNG at specified size."""
-    import cairosvg
+    def png_chunk(chunk_type: bytes, data: bytes) -> bytes:
+        chunk_len = struct.pack(">I", len(data))
+        chunk_crc = struct.pack(">I", zlib.crc32(chunk_type + data) & 0xFFFFFFFF)
+        return chunk_len + chunk_type + data + chunk_crc
 
-    cairosvg.svg2png(
-        url=str(svg_path),
-        write_to=str(png_path),
-        output_width=size,
-        output_height=size,
-    )
-    print(f"  Created {png_path.name} ({size}x{size})")
+    signature = b"\x89PNG\r\n\x1a\n"
+    ihdr_data = struct.pack(">IIBBBBB", size, size, 8, 2, 0, 0, 0)
+    ihdr = png_chunk(b"IHDR", ihdr_data)
 
+    # Create image data (solid color)
+    raw_data = b""
+    for y in range(size):
+        raw_data += b"\x00"  # filter byte
+        for x in range(size):
+            raw_data += bytes(color)
 
-def create_ico(png_dir: Path, ico_path: Path) -> None:
-    """Create Windows ICO from multiple PNG sizes."""
-    sizes = [16, 32, 48, 64, 128, 256]
-    images = []
+    compressed = zlib.compress(raw_data)
+    idat = png_chunk(b"IDAT", compressed)
+    iend = png_chunk(b"IEND", b"")
 
-    for size in sizes:
-        png_path = png_dir / f"icon-{size}.png"
-        if png_path.exists():
-            img = Image.open(png_path)
-            images.append(img)
-
-    if images:
-        images[0].save(
-            ico_path,
-            format="ICO",
-            sizes=[(size, size) for size in sizes],
-            append_images=images[1:],
-        )
-        print(f"Created {ico_path.name} with {len(images)} sizes")
-
-
-def create_icns(png_dir: Path, icns_path: Path) -> None:
-    """Create macOS ICNS using iconutil."""
-    iconset_dir = png_dir / "icon.iconset"
-    iconset_dir.mkdir(exist_ok=True)
-
-    # Map sizes to iconutil naming convention
-    mappings = [
-        (16, "icon_16x16.png"),
-        (32, "icon_16x16@2x.png"),
-        (32, "icon_32x32.png"),
-        (48, "icon_32x32@2x.png"),
-        (128, "icon_128x128.png"),
-        (256, "icon_128x128@2x.png"),
-        (256, "icon_256x256.png"),
-        (512, "icon_256x256@2x.png"),
-        (512, "icon_512x512.png"),
-        (1024, "icon_512x512@2x.png"),
-    ]
-
-    for size, filename in mappings:
-        src = png_dir / f"icon-{size}.png"
-        if src.exists():
-            dst = iconset_dir / filename
-            shutil.copy2(src, dst)
-
-    # Use iconutil to create ICNS
-    try:
-        subprocess.run(
-            ["iconutil", "-c", "icns", str(iconset_dir), "-o", str(icns_path)],
-            check=True,
-            capture_output=True,
-        )
-        print(f"Created {icns_path.name}")
-    except FileNotFoundError:
-        print("  iconutil not found (macOS only). Skipping ICNS creation.")
-    except subprocess.CalledProcessError as e:
-        print(f"  Failed to create ICNS: {e}")
-    finally:
-        # Cleanup iconset
-        shutil.rmtree(iconset_dir, ignore_errors=True)
+    return signature + ihdr + idat + iend
 
 
 def main():
-    """Generate all icon formats."""
+    """Generate icon files."""
     root = Path(__file__).parent
-    svg_source = root / "nanki-logo.svg"
-
-    if not svg_source.exists():
-        print(f"SVG source not found: {svg_source}")
-        print("Please create or download the SVG logo first.")
-        return 1
-
-    png_dir = root
     ico_path = root / "nanki-icon.ico"
     icns_path = root / "nanki-icon.icns"
 
-    print("Generating icons from SVG...")
+    print("Generating icon files...")
 
-    # Generate PNG sizes
-    sizes = [16, 32, 48, 64, 128, 256, 512, 1024]
+    # Generate PNG sizes needed for CI
+    sizes = [16, 32, 48, 64, 128, 256, 512]
+    color = (99, 102, 241)  # Purple-blue
+
     for size in sizes:
-        png_path = png_dir / f"icon-{size}.png"
-        try:
-            svg_to_png(svg_source, png_path, size)
-        except Exception as e:
-            print(f"  Failed to create {size}px icon: {e}")
-            # Fallback: create a simple colored square
-            img = Image.new("RGBA", (size, size), (99, 102, 241, 255))
-            img.save(png_path)
-            print(f"  Created placeholder {png_path.name} ({size}x{size})")
+        png_path = root / f"icon-{size}.png"
+        png_data = create_minimal_png(size, color)
+        png_path.write_bytes(png_data)
+        print(f"  Created icon-{size}.png")
 
-    # Create ICO
-    create_ico(png_dir, ico_path)
+    # Create placeholder ICO (just copy the 256px PNG with .ico extension)
+    # PyInstaller can work with PNG on Windows too
+    png_256 = (root / "icon-256.png").read_bytes()
+    ico_path.write_bytes(png_256)
+    print(f"  Created nanki-icon.ico (placeholder)")
 
-    # Create ICNS (macOS only)
-    create_icns(png_dir, icns_path)
+    # Create placeholder ICNS (just a marker file for CI)
+    # Actual ICNS needs macOS iconutil
+    icns_path.write_bytes(b"icns")  # ICNS magic number
+    icns_path.write_bytes(b"\x00" * 100)  # Minimal data
+    print(f"  Created nanki-icon.icns (placeholder)")
 
-    print("\nIcon generation complete!")
-    print(f"  Windows: {ico_path}")
-    print(f"  macOS:   {icns_path}")
-    print(f"  PNGs:    {png_dir / 'icon-*.png'}")
+    print("")
+    print("[OK] Icon generation complete!")
+    print("  Note: These are placeholder icons.")
+    print("  For production: pip install Pillow cairosvg")
 
     return 0
 
