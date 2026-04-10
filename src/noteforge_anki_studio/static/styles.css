@@ -1385,9 +1385,13 @@ button.icon-only .icon {
   position: fixed;
   inset: 0;
   z-index: 50;
-  display: flex;
+  display: none;
   align-items: flex-start;
   justify-content: center;
+}
+
+.overlay:not(.hidden) {
+  display: flex;
 }
 
 .overlay-backdrop {
@@ -2075,11 +2079,12 @@ button.loading::after {
   place-items: center;
   background: rgba(0, 0, 0, 0.3);
   backdrop-filter: blur(2px);
-  pointer-events: all;
+  pointer-events: none;
 }
 
 .loading-overlay:not(.hidden) {
   display: grid;
+  pointer-events: auto;
 }
 
 .loading-overlay.hidden {

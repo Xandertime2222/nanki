@@ -133,6 +133,87 @@ def has_alpha(text: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
+# Common German and English suffixes ordered longest-first so the longest
+# match is removed first. Used for light stemming so morphological variants
+# (e.g. "Welle" / "Wellen", "running" / "runs") collapse onto the same stem.
+_DE_SUFFIXES = (
+    "ungen", "lichen", "lichem", "licher", "liches", "lich",
+    "isch", "iert", "ierte", "iertes", "ierten",
+    "keit", "heit", "schaft",
+    "ung", "ern", "end", "est",
+    "en", "em", "er", "es", "et",
+    "te", "st", "ts", "n", "s", "e",
+)
+_EN_SUFFIXES = (
+    "ational", "tional", "ization", "ational", "fulness",
+    "ousness", "iveness",
+    "ation", "ement", "ness", "ling", "able", "ible",
+    "ment", "ence", "ance", "ical", "ious", "ously",
+    "ing", "ies", "ied", "est", "ers", "ity",
+    "ed", "es", "ly", "er", "or", "al",
+    "s",
+)
+
+
+def _strip_suffix(word: str, suffixes: tuple[str, ...]) -> str:
+    for suf in suffixes:
+        if len(word) > len(suf) + 2 and word.endswith(suf):
+            return word[: -len(suf)]
+    return word
+
+
+def stem_word(word: str) -> str:
+    """Light stem suitable for EN + DE text. Not linguistically perfect,
+    but good enough to collapse the most common inflections so contextual
+    matching can compare meaning rather than surface form.
+    """
+    w = word.lower()
+    if len(w) <= 3:
+        return w
+    # German first (more aggressive), then English suffixes
+    w = _strip_suffix(w, _DE_SUFFIXES)
+    w = _strip_suffix(w, _EN_SUFFIXES)
+    # Collapse umlauts to ASCII so "Größe" and "Groesse" align.
+    w = (w.replace("ä", "a").replace("ö", "o").replace("ü", "u")
+          .replace("ß", "ss"))
+    return w
+
+
+def extract_stems(text: str) -> set[str]:
+    """Stemmed lowercase keywords, filtered against stop words."""
+    words = WORD_PATTERN.findall((text or "").lower())
+    out: set[str] = set()
+    for w in words:
+        if len(w) < 3 or not has_alpha(w):
+            continue
+        if w in STOP_WORDS:
+            continue
+        stem = stem_word(w)
+        if len(stem) >= 3:
+            out.add(stem)
+    return out
+
+
+def extract_char_ngrams(text: str, n: int = 4) -> set[str]:
+    """Character n-grams over alphabetic runs. Captures fuzzy / morphological
+    similarity so e.g. "Wellenlänge" and "wellenlangen" overlap heavily even
+    if no exact word matches. We collapse umlauts and lowercase first.
+    """
+    if not text:
+        return set()
+    cleaned = (text.lower()
+               .replace("ä", "a").replace("ö", "o").replace("ü", "u")
+               .replace("ß", "ss"))
+    out: set[str] = set()
+    for token in re.findall(r"[a-z0-9]+", cleaned):
+        if len(token) < n:
+            out.add(token)
+            continue
+        for i in range(len(token) - n + 1):
+            out.add(token[i:i + n])
+    return out
+
+
 def extract_keywords(text: str) -> set[str]:
     """Return meaningful lowercase keywords, filtering stop words."""
     words = WORD_PATTERN.findall(text.lower())
@@ -143,6 +224,17 @@ def extract_bigrams(text: str) -> set[tuple[str, str]]:
     """Extract consecutive-word pairs (bigrams) from text."""
     words = [w.lower() for w in WORD_PATTERN.findall(text) if len(w) >= 2 and has_alpha(w)]
     return {(words[i], words[i + 1]) for i in range(len(words) - 1)}
+
+
+def extract_stem_bigrams(text: str) -> set[tuple[str, str]]:
+    """Bigrams over stems with stop words filtered. Captures phrase-level
+    context that survives reordering of inflection."""
+    stems = []
+    for w in WORD_PATTERN.findall((text or "").lower()):
+        if len(w) < 3 or not has_alpha(w) or w in STOP_WORDS:
+            continue
+        stems.append(stem_word(w))
+    return {(stems[i], stems[i + 1]) for i in range(len(stems) - 1)}
 
 
 def extract_trigrams(text: str) -> set[tuple[str, str, str]]:
@@ -355,6 +447,28 @@ def card_all_bigrams(card: CardLike) -> set[tuple[str, str]]:
     return merged
 
 
+def card_all_stems(card: CardLike) -> set[str]:
+    """Merge stemmed keywords from all card text fields."""
+    merged: set[str] = set()
+    for t in card_texts(card):
+        merged |= extract_stems(t)
+    return merged
+
+
+def card_all_stem_bigrams(card: CardLike) -> set[tuple[str, str]]:
+    merged: set[tuple[str, str]] = set()
+    for t in card_texts(card):
+        merged |= extract_stem_bigrams(t)
+    return merged
+
+
+def card_all_char_ngrams(card: CardLike, n: int = 4) -> set[str]:
+    merged: set[str] = set()
+    for t in card_texts(card):
+        merged |= extract_char_ngrams(t, n=n)
+    return merged
+
+
 # ---------------------------------------------------------------------------
 # Sentence matching
 # ---------------------------------------------------------------------------
@@ -428,11 +542,55 @@ def _excerpt_sentence_indices(
     return sorted(indices)
 
 
+def _stems_compatible(a: str, b: str) -> bool:
+    """Treat two stems as compatible if either is a prefix of the other,
+    with both stems at least 4 characters long. This bridges German
+    compound words ("wellenartig", "wellenlaengen") to their root ("well")
+    without requiring a full morphological analyzer.
+    """
+    if a == b:
+        return True
+    la, lb = len(a), len(b)
+    if la < 4 or lb < 4:
+        return False
+    if la <= lb:
+        return b.startswith(a)
+    return a.startswith(b)
+
+
+def _best_stem_match_length(card_stem: str, sent_stems: set[str], sent_prefix4: set[str]) -> int:
+    """Return the length of the longest sentence-stem that is compatible
+    with this card stem (0 if none). Used so longer matches dominate.
+    """
+    if card_stem in sent_stems:
+        return len(card_stem)
+    if len(card_stem) < 4:
+        return 0
+    if card_stem[:4] not in sent_prefix4:
+        return 0
+    best = 0
+    for ss in sent_stems:
+        if _stems_compatible(card_stem, ss) and len(ss) > best:
+            best = len(ss)
+    return best
+
+
 def _bigram_overlap_score(sent_bigrams: set[tuple[str, str]], card_bigrams: set[tuple[str, str]]) -> float:
-    """Fraction of card bigrams found in the sentence."""
+    """Fraction of card bigrams found in the sentence (prefix-aware)."""
     if not card_bigrams:
         return 0.0
+    # Fast path: exact intersection.
     overlap = len(sent_bigrams & card_bigrams)
+    # Slow path: count card bigrams that prefix-match a sentence bigram.
+    matched: set[tuple[str, str]] = set(sent_bigrams & card_bigrams)
+    remaining = card_bigrams - matched
+    if remaining and sent_bigrams:
+        for cb in remaining:
+            ca, cb2 = cb
+            for sb in sent_bigrams:
+                if _stems_compatible(ca, sb[0]) and _stems_compatible(cb2, sb[1]):
+                    overlap += 1
+                    break
     return overlap / len(card_bigrams)
 
 
@@ -449,8 +607,114 @@ def _keyword_jaccard(sent_kw: set[str], card_kw: set[str]) -> float:
     return overlap_weight / max(1, union_weight)
 
 
-MIN_BIGRAM_CONFIDENCE = 0.25   # ≥25% of card bigrams in sentence
-MIN_KEYWORD_CONFIDENCE = 0.15  # ≥15% weighted Jaccard
+def _stem_recall(sent_stems: set[str], card_stems: set[str]) -> tuple[float, int]:
+    """Length-weighted recall of card stems, with prefix-aware matching.
+
+    Returns (score, longest_matched_card_stem_len). The second value lets
+    callers reward strong matches on a single distinctive concept (e.g.
+    matching "materiewell" is much stronger evidence than matching "der").
+    """
+    if not card_stems:
+        return 0.0, 0
+    sent_prefix4 = {s[:4] for s in sent_stems if len(s) >= 4}
+    matched_weight = 0
+    longest_match = 0
+    for cs in card_stems:
+        match_len = _best_stem_match_length(cs, sent_stems, sent_prefix4)
+        if match_len:
+            # Use the *card* stem length for the weight (we want recall of
+            # the card's vocabulary, not the sentence's), but bonus the
+            # min(card,sentence) so partial-prefix matches count for less.
+            matched_weight += min(len(cs), match_len)
+            if len(cs) > longest_match:
+                longest_match = len(cs)
+    card_weight = sum(len(s) for s in card_stems)
+    return matched_weight / max(1, card_weight), longest_match
+
+
+def _char_ngram_recall(sent_ngrams: set[str], card_ngrams: set[str]) -> float:
+    """Fraction of the card's character n-grams that appear in the sentence.
+    Recall (not Jaccard) keeps long sentences from being unfairly penalized.
+    """
+    if not card_ngrams:
+        return 0.0
+    return len(sent_ngrams & card_ngrams) / len(card_ngrams)
+
+
+def _char_ngram_jaccard(a: set[str], b: set[str]) -> float:
+    if not a or not b:
+        return 0.0
+    inter = len(a & b)
+    if not inter:
+        return 0.0
+    return inter / len(a | b)
+
+
+@dataclass(slots=True)
+class CardSignature:
+    """Pre-computed contextual fingerprint of a card. Building this once per
+    card lets us score it cheaply against every sentence."""
+    stems: set[str]
+    stem_bigrams: set[tuple[str, str]]
+    char_ngrams: set[str]
+    keywords: set[str]
+    word_bigrams: set[tuple[str, str]]
+
+
+def build_card_signature(card: CardLike) -> CardSignature:
+    return CardSignature(
+        stems=card_all_stems(card),
+        stem_bigrams=card_all_stem_bigrams(card),
+        char_ngrams=card_all_char_ngrams(card),
+        keywords=card_all_keywords(card),
+        word_bigrams=card_all_bigrams(card),
+    )
+
+
+def _contextual_score(
+    sent_stems: set[str],
+    sent_stem_bigrams: set[tuple[str, str]],
+    sent_char_ngrams: set[str],
+    sig: CardSignature,
+) -> float:
+    """Combine stem recall, stem-bigram overlap, and char n-gram recall into
+    a single contextual similarity score in [0, 1].
+
+    The intuition: we don't just check whether the same words appear, we
+    check whether the same *concepts* (stems, prefix-aware so compound
+    German words still hit), the same *relationships* (stem bigrams) and
+    the same *morphology* (char n-grams that survive compounding). That's a
+    much better proxy for "this card is about this part of the text" than
+    literal word matching.
+    """
+    if not sig.stems:
+        return 0.0
+    stem_score, longest_match = _stem_recall(sent_stems, sig.stems)
+    bigram_score = _bigram_overlap_score(sent_stem_bigrams, sig.stem_bigrams)
+    char_score = _char_ngram_recall(sent_char_ngrams, sig.char_ngrams)
+    # Weighted combination — stems carry the most signal, then phrase
+    # context, then morphological similarity as a tiebreaker.
+    score = 0.50 * stem_score + 0.25 * bigram_score + 0.25 * char_score
+    # A strong stem bigram match is a near-certain hit. Bonus to push it
+    # past the threshold even if other signals are weak.
+    if bigram_score >= 0.5 and stem_score >= 0.15:
+        score = max(score, 0.6)
+    # Distinctive-concept bonus: if the card's longest stem (≥7 chars,
+    # likely a domain-specific term or compound) gets a prefix-match in the
+    # sentence, that single hit is strong evidence of topical overlap.
+    if longest_match >= 7 and char_score >= 0.10:
+        score = max(score, 0.45)
+    # Strong morphological overlap is itself a meaningful signal even if
+    # exact stems differ — char_score above ~0.30 means roughly a third of
+    # the card's character n-grams reappear in the sentence.
+    if char_score >= 0.30:
+        score = max(score, 0.4 + 0.5 * char_score)
+    return min(1.0, score)
+
+
+MIN_BIGRAM_CONFIDENCE = 0.25       # legacy threshold (kept for compat)
+MIN_KEYWORD_CONFIDENCE = 0.15      # legacy threshold (kept for compat)
+MIN_CONTEXTUAL_CONFIDENCE = 0.32   # ≥32% combined contextual score
 
 
 def match_card_to_sentences(
@@ -461,14 +725,24 @@ def match_card_to_sentences(
     *,
     sentence_keywords: list[set[str]] | None = None,
     sentence_bigrams: list[set[tuple[str, str]]] | None = None,
+    sentence_stems: list[set[str]] | None = None,
+    sentence_stem_bigrams: list[set[tuple[str, str]]] | None = None,
+    sentence_char_ngrams: list[set[str]] | None = None,
+    card_signature: CardSignature | None = None,
 ) -> list[SentenceMapping]:
-    """Map a card to the sentences it covers, using a multi-level strategy.
+    """Map a card to the sentences it covers using a multi-level strategy.
 
     Levels (tried in order, first success wins):
-      1. Anchor range → overlapping sentences
+      1. Anchor range → overlapping sentences (perfect, user-pinned)
       2. Source excerpt / selected_text found in content → overlapping sentences
-      3. Bigram overlap between card and sentence
-      4. Weighted keyword Jaccard between card and sentence
+      3. Contextual similarity (stems + stem bigrams + char n-grams).
+         This replaces the old single-level keyword Jaccard and is the
+         "contextual instead of same-word" matcher: it understands
+         morphological variants, compounds, and phrase relationships.
+
+    The contextual matcher returns *every* sentence that scores above the
+    threshold, not just the top one. That way a card about a multi-sentence
+    explanation actually highlights every related sentence.
     """
     card_id = str(card_attr(card, "id", ""))
     anchor = card_attr(card, "coverage_anchor", None)
@@ -491,37 +765,35 @@ def match_card_to_sentences(
                 mappings.append(SentenceMapping(idx, card_id, 0.9, "text-match"))
             return mappings
 
-    # Level 3: Bigram overlap
-    c_bigrams = card_all_bigrams(card)
-    if c_bigrams and sentence_bigrams:
-        best_idx = -1
+    # Level 3: Contextual similarity. Requires precomputed sentence features.
+    sig = card_signature if card_signature is not None else build_card_signature(card)
+    if (sig.stems and sentence_stems is not None
+            and sentence_stem_bigrams is not None
+            and sentence_char_ngrams is not None):
+        scored: list[tuple[int, float]] = []
         best_score = 0.0
-        for i, s_bigrams in enumerate(sentence_bigrams):
-            if not sentences[i].is_content:
+        for i, sent in enumerate(sentences):
+            if not sent.is_content:
                 continue
-            score = _bigram_overlap_score(s_bigrams, c_bigrams)
+            score = _contextual_score(
+                sentence_stems[i],
+                sentence_stem_bigrams[i],
+                sentence_char_ngrams[i],
+                sig,
+            )
+            if score >= MIN_CONTEXTUAL_CONFIDENCE:
+                scored.append((i, score))
             if score > best_score:
                 best_score = score
-                best_idx = i
-        if best_score >= MIN_BIGRAM_CONFIDENCE and best_idx >= 0:
-            mappings.append(SentenceMapping(best_idx, card_id, best_score, "bigram"))
-            return mappings
-
-    # Level 4: Keyword Jaccard
-    c_keywords = card_all_keywords(card)
-    if c_keywords and sentence_keywords:
-        best_idx = -1
-        best_score = 0.0
-        for i, s_kw in enumerate(sentence_keywords):
-            if not sentences[i].is_content:
-                continue
-            score = _keyword_jaccard(s_kw, c_keywords)
-            if score > best_score:
-                best_score = score
-                best_idx = i
-        if best_score >= MIN_KEYWORD_CONFIDENCE and best_idx >= 0:
-            mappings.append(SentenceMapping(best_idx, card_id, best_score, "keyword"))
-            return mappings
+        if scored:
+            # Keep matches that are within 25% of the best score so we
+            # highlight every closely-related sentence, not just the peak.
+            cutoff = max(MIN_CONTEXTUAL_CONFIDENCE, best_score * 0.75)
+            for idx, score in scored:
+                if score >= cutoff:
+                    mappings.append(SentenceMapping(idx, card_id, score, "contextual"))
+            if mappings:
+                return mappings
 
     return []
 
@@ -626,8 +898,18 @@ def find_gaps(content: str, sentences: list[Sentence], sentence_cards: list[set[
 # ---------------------------------------------------------------------------
 
 
-def card_overlaps_note(content: str, note_kw: set[str], card: AnkiLibraryCard) -> bool:
-    """Check whether an Anki library card is likely relevant to this note."""
+def card_overlaps_note(
+    content: str,
+    note_kw: set[str],
+    card: AnkiLibraryCard,
+    *,
+    note_stems: set[str] | None = None,
+) -> bool:
+    """Check whether an Anki library card is likely relevant to this note.
+
+    Uses literal substring + keyword Jaccard for backward-compat callers,
+    plus stem recall for the contextual matcher when note_stems is given.
+    """
     content_lower = content.lower()
     for candidate in card_texts(card):
         candidate_lower = candidate.lower()
@@ -641,6 +923,11 @@ def card_overlaps_note(content: str, note_kw: set[str], card: AnkiLibraryCard) -
         jaccard = _keyword_jaccard(candidate_kw, note_kw)
         if jaccard >= 0.12:
             return True
+        if note_stems is not None:
+            candidate_stems = extract_stems(candidate)
+            stem_recall, _ = _stem_recall(note_stems, candidate_stems)
+            if stem_recall >= 0.3:
+                return True
     return False
 
 
@@ -776,9 +1063,14 @@ def build_note_coverage(
     sentences = split_sentences(content)
     content_sentences = [s for s in sentences if s.is_content]
 
-    # Pre-compute keywords and bigrams for each sentence
+    # Pre-compute features for each sentence. Stems / stem-bigrams / char
+    # n-grams power the new contextual matcher; the old keyword/bigram sets
+    # stay around because some external callers (e.g. ai.py) still use them.
     sentence_keywords = [extract_keywords(s.text) if s.is_content else set() for s in sentences]
     sentence_bigrams = [extract_bigrams(s.text) if s.is_content else set() for s in sentences]
+    sentence_stems = [extract_stems(s.text) if s.is_content else set() for s in sentences]
+    sentence_stem_bigrams = [extract_stem_bigrams(s.text) if s.is_content else set() for s in sentences]
+    sentence_char_ngrams = [extract_char_ngrams(s.text) if s.is_content else set() for s in sentences]
 
     # Per-sentence card sets
     sentence_cards: list[set[str]] = [set() for _ in sentences]
@@ -786,16 +1078,25 @@ def build_note_coverage(
     local_cards = list(note.cards)
     external_cards = list(external_cards or [])
     note_kw = extract_keywords(plain_card_text(content))
-    external_candidates = [c for c in external_cards if card_overlaps_note(content, note_kw, c)]
+    note_stems = extract_stems(plain_card_text(content))
+    external_candidates = [
+        c for c in external_cards
+        if card_overlaps_note(content, note_kw, c, note_stems=note_stems)
+    ]
 
     card_results: list[dict[str, Any]] = []
 
     # Map local cards
     for card in local_cards:
+        signature = build_card_signature(card)
         mappings = match_card_to_sentences(
             sentences, content, sections, card,
             sentence_keywords=sentence_keywords,
             sentence_bigrams=sentence_bigrams,
+            sentence_stems=sentence_stems,
+            sentence_stem_bigrams=sentence_stem_bigrams,
+            sentence_char_ngrams=sentence_char_ngrams,
+            card_signature=signature,
         )
         if not mappings:
             card_results.append(build_card_result(card, mapped=False))
@@ -810,10 +1111,15 @@ def build_note_coverage(
     # Map external (Anki) cards
     matched_external: list[dict[str, Any]] = []
     for card in external_candidates:
+        signature = build_card_signature(card)
         mappings = match_card_to_sentences(
             sentences, content, sections, card,
             sentence_keywords=sentence_keywords,
             sentence_bigrams=sentence_bigrams,
+            sentence_stems=sentence_stems,
+            sentence_stem_bigrams=sentence_stem_bigrams,
+            sentence_char_ngrams=sentence_char_ngrams,
+            card_signature=signature,
         )
         if not mappings:
             continue

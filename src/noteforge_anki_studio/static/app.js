@@ -1968,10 +1968,6 @@ const testAnki = async () => {
     hideLoading();
   }
 };
-  refreshDeckDataList();
-  renderAnkiStatus();
-  showToast(t('toast.ankiOk', { version: result.version, count: state.decks.length }));
-};
 
 const refreshAnkiDecks = async ({ quiet = false } = {}) => {
   await saveSettings({ quiet: true, reloadNotes: false });
