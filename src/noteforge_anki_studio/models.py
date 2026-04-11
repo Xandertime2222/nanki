@@ -100,6 +100,13 @@ class CoverageAnchor(BaseModel):
     source_item_label: str = ""
 
 
+class AppState(BaseModel):
+    """App state for onboarding, update checks, etc."""
+    has_seen_onboarding: bool = False
+    last_update_check: str | None = None
+    dismissed_version: str | None = None
+
+
 class Card(BaseModel):
     id: str
     type: CardType = "basic"

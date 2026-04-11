@@ -531,6 +531,56 @@
       </div>
     </div>
 
+    <div id="onboarding-modal" class="overlay hidden">
+      <div class="overlay-backdrop"></div>
+      <div class="modal-panel onboarding-panel">
+        <div class="onboarding-header">
+          <img class="onboarding-logo" src="/static/nanki-logo.svg" alt="Nanki" />
+          <h2 data-i18n="onboarding.title">Welcome to Nanki!</h2>
+          <p class="muted" data-i18n="onboarding.subtitle">Your local-first study workspace for notes and flashcards.</p>
+        </div>
+
+        <div class="onboarding-steps">
+          <div class="onboarding-step active" data-step="1">
+            <div class="step-icon"><svg class="icon" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 13l1.5-4L10.5 2l2.5 2.5L6 11.5z"/><path d="M8.5 4l2.5 2.5"/></svg></div>
+            <h3 data-i18n="onboarding.step1Title">Create notes first</h3>
+            <p data-i18n="onboarding.step1Text">Start by writing your own notes in Markdown. Nanki saves everything locally in the background.</p>
+          </div>
+
+          <div class="onboarding-step" data-step="2">
+            <div class="step-icon"><svg class="icon" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="9" height="9" rx="1.5"/><path d="M7.5 2v2m0 8v2M2 7.5h2m8 0h2"/></svg></div>
+            <h3 data-i18n="onboarding.step2Title">Select text to create cards</h3>
+            <p data-i18n="onboarding.step2Text">Highlight any text and click the popup to instantly create Basic or Cloze flashcards.</p>
+          </div>
+
+          <div class="onboarding-step" data-step="3">
+            <div class="step-icon"><svg class="icon" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M7.5 2L1.5 5.5 7.5 9l6-3.5L7.5 2z"/><path d="M1.5 9l6 3.5 6-3.5"/></svg></div>
+            <h3 data-i18n="onboarding.step3Title">Push to Anki or study locally</h3>
+            <p data-i18n="onboarding.step3Text">Sync cards to Anki via AnkiConnect, or study directly in Nanki with coverage analysis.</p>
+          </div>
+
+          <div class="onboarding-step" data-step="4">
+            <div class="step-icon"><svg class="icon" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7.5" cy="7.5" r="2"/><path d="M7.5 1.5v2m0 8v2M1.5 7.5h2m8 0h2"/></svg></div>
+            <h3 data-i18n="onboarding.step4Title">AI-powered features (optional)</h3>
+            <p data-i18n="onboarding.step4Text">Auto-generate flashcards, explain concepts, or chat with your notes using local or cloud AI models.</p>
+          </div>
+        </div>
+
+        <div class="onboarding-footer">
+          <div class="onboarding-dots">
+            <span class="dot active" data-dot="1"></span>
+            <span class="dot" data-dot="2"></span>
+            <span class="dot" data-dot="3"></span>
+            <span class="dot" data-dot="4"></span>
+          </div>
+          <div class="onboarding-actions">
+            <button id="onboarding-skip-btn" class="ghost" data-i18n="onboarding.skip">Skip</button>
+            <button id="onboarding-next-btn" class="primary" data-i18n="onboarding.next">Next</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div id="import-hub-modal" class="overlay hidden">
       <div class="overlay-backdrop" data-close-import-hub="true"></div>
       <div class="modal-panel import-hub-panel">

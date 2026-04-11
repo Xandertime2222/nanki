@@ -34,6 +34,7 @@ from .models import (
     SaveCardRequest,
     SaveNoteRequest,
     WorkspaceUpdateRequest,
+    AppState,
 )
 from .storage import WorkspaceStore, utc_now_iso
 
@@ -72,6 +73,64 @@ async def get_settings() -> AppSettings:
 @app.put("/api/settings")
 async def update_settings(payload: AppSettings) -> AppSettings:
     return settings_manager.save(payload)
+
+
+@app.get("/api/state")
+async def get_state() -> AppState:
+    """Get app state (onboarding, update checks, etc.)"""
+    return AppState.model_validate(settings_manager.load_state())
+
+
+@app.put("/api/state")
+async def update_state(payload: AppState) -> AppState:
+    """Update app state (onboarding, update checks, etc.)"""
+    return AppState.model_validate(settings_manager.save_state(payload.model_dump()))
+
+
+@app.get("/api/updates/check")
+async def check_for_updates() -> dict:
+    """Check GitHub for latest release"""
+    import httpx
+    current_version = "0.5.0"
+    
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(
+                "https://api.github.com/repos/Xandertime2222/nanki/releases/latest",
+                headers={"Accept": "application/vnd.github+json"}
+            )
+            if response.status_code == 200:
+                release = response.json()
+                latest_version = release.get("tag_name", "v0.0.0").lstrip("v")
+                
+                def parse_version(v: str) -> tuple:
+                    parts = v.split(".")
+                    return tuple(int(p) for p in parts[:3] if p.isdigit())
+                
+                current_tuple = parse_version(current_version)
+                latest_tuple = parse_version(latest_version)
+                
+                has_update = latest_tuple > current_tuple
+                
+                return {
+                    "current_version": current_version,
+                    "latest_version": latest_version,
+                    "has_update": has_update,
+                    "release_url": release.get("html_url", ""),
+                    "release_notes": release.get("body", ""),
+                    "checked_at": utc_now_iso()
+                }
+    except Exception as e:
+        pass
+    
+    return {
+        "current_version": current_version,
+        "latest_version": current_version,
+        "has_update": False,
+        "release_url": "",
+        "release_notes": "",
+        "checked_at": utc_now_iso()
+    }
 
 
 @app.post("/api/settings/workspace")
