@@ -2076,11 +2076,15 @@ const finishTour = () => {
     tourOverlay = null;
   }
   state.hasSeenTour = true;
+  // Use sessionStorage as fallback since localStorage might not persist in webview
   try {
     localStorage.setItem('nanki_has_seen_tour', 'true');
-    console.log('[Nanki] Tour marked as seen in localStorage');
+    sessionStorage.setItem('nanki_has_seen_tour_session', 'true');
+    console.log('[Nanki] Tour marked as seen in localStorage and sessionStorage');
   } catch (e) {
     console.warn('[Nanki] Could not save tour state:', e);
+    // Fallback to in-memory state
+    state.hasSeenTour = true;
   }
 };
 
@@ -3211,13 +3215,20 @@ window.addEventListener('DOMContentLoaded', () => {
   });
   
   // Check if first run and show tour
-  const hasSeenTour = localStorage.getItem('nanki_has_seen_tour') === 'true';
-  console.log('[Nanki] Tour seen:', hasSeenTour);
+  const hasSeenTourLS = localStorage.getItem('nanki_has_seen_tour') === 'true';
+  const hasSeenTourSession = sessionStorage.getItem('nanki_has_seen_tour_session') === 'true';
+  const hasSeenTour = hasSeenTourLS || hasSeenTourSession;
+  
+  console.log('[Nanki] Tour seen (localStorage):', hasSeenTourLS);
+  console.log('[Nanki] Tour seen (sessionStorage):', hasSeenTourSession);
+  
   if (!hasSeenTour) {
     console.log('[Nanki] Starting first-run tour');
     setTimeout(() => {
       startTour();
     }, 1500);
+  } else {
+    console.log('[Nanki] Skipping tour - user has seen it before');
   }
 });
 
