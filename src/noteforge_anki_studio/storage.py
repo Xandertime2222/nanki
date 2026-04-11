@@ -81,12 +81,14 @@ class WorkspaceStore:
         if not match:
             return {}, raw
         frontmatter = yaml.safe_load(match.group(1)) or {}
-        body = raw[match.end() :]
+        body = raw[match.end() :].lstrip()  # Strip leading newlines after frontmatter
         return frontmatter, body
-
+    
     def dump_markdown_file(self, meta: dict[str, Any], content: str) -> str:
         frontmatter = yaml.safe_dump(meta, sort_keys=False, allow_unicode=True).strip()
-        return f"---\n{frontmatter}\n---\n\n{content.rstrip()}\n"
+        # Strip content to normalize whitespace
+        normalized_content = content.strip()
+        return f"---\n{frontmatter}\n---\n\n{normalized_content}\n"
 
     def list_notes(self) -> list[NoteListItem]:
         notes: list[NoteListItem] = []

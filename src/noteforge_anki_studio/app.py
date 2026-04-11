@@ -13,7 +13,6 @@ from fastapi.templating import Jinja2Templates
 from .ai import AIConfigurationError, AIService, AIServiceError
 from .anki_connect import AnkiConnectClient, AnkiConnectError
 from .config import SettingsManager
-from .coverage import build_note_coverage
 from .coverage_apcg import (
     apcg_coverage,
     coverage_summary,
