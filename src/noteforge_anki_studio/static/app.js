@@ -2078,8 +2078,9 @@ const finishTour = () => {
   state.hasSeenTour = true;
   try {
     localStorage.setItem('nanki_has_seen_tour', 'true');
-  } catch {
-    // ignore
+    console.log('[Nanki] Tour marked as seen in localStorage');
+  } catch (e) {
+    console.warn('[Nanki] Could not save tour state:', e);
   }
 };
 
@@ -3211,10 +3212,12 @@ window.addEventListener('DOMContentLoaded', () => {
   
   // Check if first run and show tour
   const hasSeenTour = localStorage.getItem('nanki_has_seen_tour') === 'true';
+  console.log('[Nanki] Tour seen:', hasSeenTour);
   if (!hasSeenTour) {
+    console.log('[Nanki] Starting first-run tour');
     setTimeout(() => {
       startTour();
-    }, 1000);
+    }, 1500);
   }
 });
 
