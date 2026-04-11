@@ -3078,6 +3078,36 @@ const bindEvents = () => {
     showToast(error.message, 'error');
   }));
   
+  // Reset prompts button
+  const resetPromptsBtn = document.getElementById('reset-prompts-btn');
+  if (resetPromptsBtn) {
+    resetPromptsBtn.addEventListener('click', async () => {
+      try {
+        const response = await fetch('/api/settings/prompts/reset', { method: 'POST' });
+        if (!response.ok) throw new Error('Failed to reset prompts');
+        
+        const statusEl = document.getElementById('reset-prompts-status');
+        if (statusEl) {
+          statusEl.textContent = '✅ Prompts successfully reset to default!';
+          statusEl.style.color = 'var(--success)';
+        }
+        showToast('AI prompts reset to default', 'success');
+        
+        // Clear status after 5 seconds
+        setTimeout(() => {
+          if (statusEl) statusEl.textContent = '';
+        }, 5000);
+      } catch (error) {
+        const statusEl = document.getElementById('reset-prompts-status');
+        if (statusEl) {
+          statusEl.textContent = `❌ Error: ${error.message}`;
+          statusEl.style.color = 'var(--danger)';
+        }
+        showToast(`Failed to reset prompts: ${error.message}`, 'error');
+      }
+    });
+  }
+  
   // Update checker
   if (els.checkUpdateBtn) {
     els.checkUpdateBtn.addEventListener('click', () => checkForUpdates().catch((error) => showToast(error.message, 'error')));

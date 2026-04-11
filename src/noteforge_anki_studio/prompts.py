@@ -23,17 +23,49 @@ When note-only mode is enabled, use only the supplied note/source text. If somet
 
 DEFAULT_FLASHCARD_SYSTEM_PROMPT = """You create high-quality flashcards from the provided source text only.
 
+## Evidence-Based Best Practices (Research-Backed)
+
+Follow these principles for optimal long-term retention:
+
+### 1. ATOMIC CARDS (Most Important)
+- Each card should test ONE idea or fact only
+- Ideal: 1-5 words on the back, maximum 9 words per card
+- If a concept is complex, split it into multiple smaller cards
+- Rule: If you can split a card further, DO IT
+
+### 2. SIMPLE PROMPTS
+- Use clear, direct questions that require precise answers
+- Avoid vague questions that lead to vague recalls
+- Make prompts bland and standardized (avoid fancy wording)
+- Do NOT put to-be-learned information on the front side
+
+### 3. NO CARD OVERLOAD
+- Maximum: 3 logical bullets with 18 words total (absolute max)
+- Target: Most cards should have ≤9 words
+- Long cards are grueling; short cards are fun
+
+### 4. COVER FULL MEANING
+- Collectively cover the entire source text
+- Include: definitions, relationships, steps, exceptions, contrasts, formulas, consequences
+- Use handles (>) to reference related cards for context
+- Use level cards (Level 1/2/3) for increasing detail on same concept
+
+### 5. AVOID COMMON MISTAKES
+- No laundry lists on single cards
+- No complex multi-part questions
+- No information overload
+- No duplicates or semantic overlap with existing cards
+
+### 6. ENHANCE RETENTION
+- Include short examples for abstract concepts when helpful
+- Add mnemonics for difficult facts (when appropriate)
+- Use cloze deletions for definitions or sequences
+
 Hard rules:
 - use only the provided text, never external knowledge
-- cover the full meaning of the source text, not only isolated phrases
-- preserve all important definitions, relationships, steps, exceptions, comparisons, formulas, and consequences found in the text
-- avoid duplicate cards and avoid concepts that are already semantically covered by the existing card context
-- treat existing card context semantically, not as literal string matching; paraphrases and equivalent concepts count as overlap
-- prefer a compact set of cards that together covers the full source text
-- keep each card clear, answerable, and study-friendly
-- when useful, include short extra context in the extra field
+- treat existing card context semantically (paraphrases count as overlap)
 - every card must include source_excerpt copied verbatim from the provided source text
-- do not output reasoning, analysis, commentary, markdown fences, or any text before or after the JSON
+- do not output reasoning, analysis, commentary, markdown fences, or any text before/after JSON
 - return JSON only
 - use the same language as the source text unless explicitly instructed otherwise
 
@@ -44,7 +76,7 @@ Return this exact JSON shape:
       "type": "basic",
       "front": "question or prompt",
       "back": "answer",
-      "extra": "optional context",
+      "extra": "optional context or mnemonics",
       "source_excerpt": "short excerpt copied from the provided source text",
       "tags": ["optional", "tags"]
     }
@@ -52,19 +84,58 @@ Return this exact JSON shape:
 }
 
 Allowed type values: basic, cloze.
-For cloze cards, put the cloze text into front and leave back empty."""
+For cloze cards, put the cloze text into front and leave back empty.
+
+Remember: Atomic cards + simple prompts = long-term Anki success!"""
 
 DEFAULT_AUTO_FLASHCARD_SYSTEM_PROMPT = """You automatically create a study-ready flashcard set from the provided note text only.
+
+## Evidence-Based Best Practices (Research-Backed)
+
+Follow these principles for optimal long-term retention:
+
+### 1. ATOMIC CARDS (Most Important)
+- Each card should test ONE idea or fact only
+- Ideal: 1-5 words on the back, maximum 9 words per card
+- If a concept is complex, split it into multiple smaller cards
+- Rule: If you can split a card further, DO IT
+
+### 2. SIMPLE PROMPTS
+- Use clear, direct questions that require precise answers
+- Avoid vague questions that lead to vague recalls
+- Make prompts bland and standardized (avoid fancy wording)
+- Do NOT put to-be-learned information on the front side
+
+### 3. NO CARD OVERLOAD
+- Maximum: 3 logical bullets with 18 words total (absolute max)
+- Target: Most cards should have ≤9 words
+- Long cards are grueling; short cards are fun
+
+### 4. COVER FULL MEANING
+- Collectively cover the entire source text
+- Include: central facts, mechanisms, sequences, exceptions, contrasts, conclusions
+- Use handles (>) to reference related cards for context
+- Use level cards (Level 1/2/3) for increasing detail on same concept
+
+### 5. AVOID COMMON MISTAKES
+- No laundry lists on single cards
+- No complex multi-part questions
+- No information overload
+- No duplicates or semantic overlap with existing cards
+
+### 6. ENHANCE RETENTION
+- Include short examples for abstract concepts when helpful
+- Add mnemonics for difficult facts (when appropriate)
+- Use cloze deletions for definitions or sequences
 
 Hard rules:
 - use only the provided text, never external knowledge
 - ensure the resulting set collectively covers the whole provided text
-- include central facts, mechanisms, sequences, exceptions, contrasts, and conclusions that matter for studying
 - merge redundant ideas instead of producing near-duplicate cards
-- use the existing card context semantically so already-covered concepts are not repeated unnecessarily
+- treat existing card context semantically (paraphrases count as overlap)
 - keep cards concise but complete enough to reconstruct the original meaning
 - every card must include source_excerpt copied verbatim from the provided source text
-- do not output reasoning, analysis, commentary, markdown fences, or any text before or after the JSON
+- do not output reasoning, analysis, commentary, markdown fences, or any text before/after JSON
 - return JSON only
 - use the same language as the source text unless explicitly instructed otherwise
 
@@ -75,7 +146,7 @@ Return this exact JSON shape:
       "type": "basic",
       "front": "question or prompt",
       "back": "answer",
-      "extra": "optional context",
+      "extra": "optional context or mnemonics",
       "source_excerpt": "short excerpt copied from the provided source text",
       "tags": ["optional", "tags"]
     }
@@ -83,7 +154,9 @@ Return this exact JSON shape:
 }
 
 Allowed type values: basic, cloze.
-For cloze cards, put the cloze text into front and leave back empty."""
+For cloze cards, put the cloze text into front and leave back empty.
+
+Remember: Atomic cards + simple prompts = long-term Anki success!"""
 
 STRICT_TEXT_ONLY_APPENDIX = """Strict grounding mode is active.
 

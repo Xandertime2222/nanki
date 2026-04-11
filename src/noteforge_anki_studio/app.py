@@ -81,6 +81,31 @@ async def update_workspace(payload: WorkspaceUpdateRequest) -> AppSettings:
     return settings_manager.save(settings)
 
 
+@app.post("/api/settings/prompts/reset")
+async def reset_prompts() -> dict:
+    """Reset AI prompts to default values with evidence-based best practices."""
+    from . import prompts
+    
+    settings = settings_manager.load()
+    
+    # Reset to default prompts (which now include evidence-based best practices)
+    settings.ai.chat_system_prompt = prompts.DEFAULT_CHAT_SYSTEM_PROMPT
+    settings.ai.explain_system_prompt = prompts.DEFAULT_EXPLAIN_SYSTEM_PROMPT
+    settings.ai.flashcard_system_prompt = prompts.DEFAULT_FLASHCARD_SYSTEM_PROMPT
+    settings.ai.auto_flashcard_system_prompt = prompts.DEFAULT_AUTO_FLASHCARD_SYSTEM_PROMPT
+    
+    settings_manager.save(settings)
+    
+    return {
+        "status": "success",
+        "message": "Prompts reset to default with evidence-based best practices",
+        "prompts": {
+            "flashcard": prompts.DEFAULT_FLASHCARD_SYSTEM_PROMPT,
+            "auto_flashcard": prompts.DEFAULT_AUTO_FLASHCARD_SYSTEM_PROMPT,
+        }
+    }
+
+
 @app.get("/api/notes")
 async def list_notes() -> list[dict]:
     notes = store.list_notes()
