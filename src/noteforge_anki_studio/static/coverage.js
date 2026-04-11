@@ -82,7 +82,6 @@
     currentNoteId = event.detail?.noteId || window.currentNoteId;
     resetUI();
   }
-  }
 
   /**
    * Update mode hint text
@@ -236,13 +235,6 @@
     } finally {
       showLoading(false);
     }
-  }
-    
-    return `
-      <div class="apcg-proposition-list" style="display: flex; flex-direction: column; gap: 8px;">
-        ${propositions.map(p => renderPropositionCard(p)).join('')}
-      </div>
-    `;
   }
 
   /**
