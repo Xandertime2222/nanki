@@ -20,6 +20,7 @@ from .coverage_apcg import (
     CoverageConfig,
     CoverageMode,
     detect_text_type,
+    generate_coverage_html,
 )
 from .exporters import CardExporter
 from .importers import ImportService, UnsupportedImportError
@@ -350,7 +351,9 @@ async def get_note_coverage(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     content = note.content or ""
-    if not content.strip():
+    # Normalize content - strip leading/trailing whitespace and newlines
+    content = content.strip()
+    if not content:
         return {
             "total_core_coverage": 0,
             "total_exact_coverage": 0,
@@ -368,6 +371,7 @@ async def get_note_coverage(
                 "front": card.front or "",
                 "back": card.back or "",
                 "extra": card.extra or "",
+                "source_excerpt": card.source_excerpt or "",
             }
         )
 
@@ -409,6 +413,7 @@ async def get_note_coverage(
         "uncovered_count": len(result.uncovered_propositions),
         "conflicts": [],
         "propositions": [],
+        "coverage_html": generate_coverage_html(content, result.propositions),
     }
 
     for pc in result.propositions:
