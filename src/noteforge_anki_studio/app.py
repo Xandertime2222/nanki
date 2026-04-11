@@ -14,6 +14,7 @@ from .ai import AIConfigurationError, AIService, AIServiceError
 from .anki_connect import AnkiConnectClient, AnkiConnectError
 from .config import SettingsManager
 from .coverage import build_note_coverage
+from .coverage_apcg import apcg_coverage, coverage_summary, CoverageConfig, CoverageMode, detect_text_type
 from .exporters import CardExporter
 from .importers import ImportService, UnsupportedImportError
 from .updater import is_update_available
@@ -445,6 +446,144 @@ async def ai_generate_cards(payload: AIGenerateCardsRequest) -> dict:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except (AIConfigurationError, AIServiceError, Exception) as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.post("/api/notes/{note_id}/coverage/apcg")
+async def analyze_coverage_apcg(
+    note_id: str,
+    mode: str = "auto",
+    include_anki_cards: bool = True,
+) -> dict:
+    """Analyze note coverage using APCG algorithm with specialized modes."""
+    try:
+        note = store.load_note(note_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    
+    # Get note content
+    content = note.document.content or ""
+    if not content.strip():
+        return {"error": "Note content is empty"}
+    
+    # Build cards list from note
+    cards = []
+    for card in note.cards:
+        cards.append({
+            "id": card.id,
+            "front": card.front or "",
+            "back": card.back or "",
+            "extra": card.extra or "",
+        })
+    
+    # Also fetch Anki cards if requested
+    if include_anki_cards:
+        try:
+            anki_cards = await anki_client.get_cards_for_note(
+                note.document.title or note_id
+            )
+            for ac in anki_cards:
+                cards.append({
+                    "id": f"anki:{ac.get('cardId', '')}",
+                    "front": ac.get('fields', {}).get('Front', ''),
+                    "back": ac.get('fields', {}).get('Back', ''),
+                    "extra": ac.get('fields', {}).get('Extra', ''),
+                })
+        except Exception:
+            pass  # Ignore Anki errors, just use local cards
+    
+    # Map mode string to enum
+    mode_map = {
+        "auto": CoverageMode.AUTO,
+        "facts": CoverageMode.FACTS,
+        "process": CoverageMode.PROCESS,
+        "definition": CoverageMode.DEFINITION,
+        "universal": CoverageMode.UNIVERSAL,
+    }
+    coverage_mode = mode_map.get(mode.lower(), CoverageMode.AUTO)
+    
+    # Run APCG analysis
+    config = CoverageConfig(mode=coverage_mode, auto_detect=(coverage_mode == CoverageMode.AUTO))
+    result = apcg_coverage(content, cards, config)
+    
+    # Build response
+    response = {
+        "detected_mode": result.detected_mode,
+        "total_core_coverage": result.total_core,
+        "total_exact_coverage": result.total_exact,
+        "total_propositions": len(result.propositions),
+        "uncovered_count": len(result.uncovered_propositions),
+        "conflicting_cards_count": len(result.conflicting_cards),
+        "propositions": [],
+        "uncovered": [],
+        "conflicts": [],
+        "span_scores": result.span_scores,
+    }
+    
+    # Add proposition details
+    for pc in result.propositions:
+        prop_data = {
+            "id": pc.proposition.id,
+            "text": pc.proposition.text,
+            "type": pc.proposition.proposition_type,
+            "core_score": pc.core_score,
+            "exact_score": pc.exact_score,
+            "matched": len(pc.matched_evidence) > 0,
+            "match_method": pc.match_method,
+            "front_back_match": pc.front_back_match,
+            "uncovered_slots": pc.uncovered_slots,
+            "matched_card_ids": [ev.card_id for ev in pc.matched_evidence],
+        }
+        response["propositions"].append(prop_data)
+    
+    # Add uncovered propositions
+    for prop in result.uncovered_propositions:
+        response["uncovered"].append({
+            "id": prop.id,
+            "text": prop.text,
+            "type": prop.proposition_type,
+        })
+    
+    # Add conflicts
+    for card_id, score in result.conflicting_cards:
+        response["conflicts"].append({
+            "card_id": card_id,
+            "conflict_score": score,
+        })
+    
+    return response
+
+
+@app.get("/api/notes/{note_id}/coverage/summary")
+async def get_coverage_summary(note_id: str, mode: str = "auto") -> dict:
+    """Get quick coverage summary for a note."""
+    try:
+        note = store.load_note(note_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    
+    content = note.document.content or ""
+    cards = [{"id": c.id, "front": c.front, "back": c.back, "extra": c.extra} for c in note.cards]
+    
+    mode_map = {
+        "auto": CoverageMode.AUTO,
+        "facts": CoverageMode.FACTS,
+        "process": CoverageMode.PROCESS,
+        "definition": CoverageMode.DEFINITION,
+        "universal": CoverageMode.UNIVERSAL,
+    }
+    coverage_mode = mode_map.get(mode.lower(), CoverageMode.AUTO)
+    config = CoverageConfig(mode=coverage_mode)
+    
+    result = apcg_coverage(content, cards, config)
+    
+    return {
+        "detected_mode": result.detected_mode,
+        "core_coverage": round(result.total_core * 100, 1),
+        "exact_coverage": round(result.total_exact * 100, 1),
+        "propositions_count": len(result.propositions),
+        "uncovered_count": len(result.uncovered_propositions),
+        "coverage_level": "high" if result.total_core > 0.6 else "medium" if result.total_core > 0.3 else "low",
+    }
 
 
 @app.post("/api/ai/suggest-cards-for-gaps")
