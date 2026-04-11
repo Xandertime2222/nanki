@@ -16,6 +16,7 @@ from .config import SettingsManager
 from .coverage import build_note_coverage
 from .exporters import CardExporter
 from .importers import ImportService, UnsupportedImportError
+from .updater import is_update_available
 from .models import (
     AIChatRequest,
     AIExplainRequest,
@@ -376,6 +377,12 @@ async def ai_models() -> dict:
         return await ai_service.list_models(settings)
     except (AIConfigurationError, AIServiceError, Exception) as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.get("/api/update/check")
+async def check_for_updates() -> dict:
+    """Check if a new version of Nanki is available."""
+    return is_update_available()
 
 
 @app.post("/api/ai/chat")

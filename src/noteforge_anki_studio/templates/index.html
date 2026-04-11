@@ -366,6 +366,23 @@
           <section class="card-surface nested-card">
             <div class="panel-head inline-bottom-gap">
               <div>
+                <h4 data-i18n="settings.updateTitle">Updates</h4>
+                <p class="muted" data-i18n="settings.updateSubtitle">Check for new versions of Nanki.</p>
+              </div>
+            </div>
+            <div class="inline-bottom-gap">
+              <div id="update-status" class="settings-status-text muted"></div>
+              <div id="update-meta" class="settings-status-meta"></div>
+            </div>
+            <div class="toolbar-group right compact-top-gap">
+              <button id="check-update-btn" class="ghost" data-i18n="settings.checkUpdate">Check for updates</button>
+              <button id="download-update-btn" class="primary hidden" data-i18n="settings.downloadUpdate">Download update</button>
+            </div>
+          </section>
+
+          <section class="card-surface nested-card">
+            <div class="panel-head inline-bottom-gap">
+              <div>
                 <h4 data-i18n="settings.ankiTitle">AnkiConnect</h4>
                 <p class="muted" data-i18n="settings.ankiSubtitle">Connection, deck discovery, and sync behavior.</p>
               </div>

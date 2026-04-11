@@ -109,6 +109,16 @@ const I18N = {
     'tour.back': 'Back',
     'tour.finish': 'Finish',
     'tour.skip': 'Skip',
+    'settings.updateTitle': 'Updates',
+    'settings.updateSubtitle': 'Check for new versions of Nanki.',
+    'settings.checkUpdate': 'Check for updates',
+    'settings.downloadUpdate': 'Download update',
+    'settings.updateNotChecked': 'Click "Check for updates" to see if a new version is available.',
+    'settings.updateCheckFailed': 'Failed to check for updates',
+    'settings.updateAvailable': 'Version {version} is available!',
+    'settings.newVersionAvailable': 'New version available',
+    'settings.upToDate': 'You are running the latest version',
+    'settings.checkingForUpdates': 'Checking for updates...',
     'editor.emptyLabel': 'Blank note',
     'editor.emptyTitle': 'Start with your own thoughts',
     'editor.emptySubtitle': 'Type directly. Nanki saves Markdown in the background and lets you import files later.',
@@ -347,6 +357,16 @@ const I18N = {
     'tour.back': 'Zurück',
     'tour.finish': 'Fertig',
     'tour.skip': 'Überspringen',
+    'settings.updateTitle': 'Updates',
+    'settings.updateSubtitle': 'Nach neuen Versionen von Nanki suchen.',
+    'settings.checkUpdate': 'Nach Updates suchen',
+    'settings.downloadUpdate': 'Update herunterladen',
+    'settings.updateNotChecked': 'Klicke "Nach Updates suchen" um zu prüfen ob eine neue Version verfügbar ist.',
+    'settings.updateCheckFailed': 'Update-Prüfung fehlgeschlagen',
+    'settings.updateAvailable': 'Version {version} ist verfügbar!',
+    'settings.newVersionAvailable': 'Neue Version verfügbar',
+    'settings.upToDate': 'Du nutzt die neueste Version',
+    'settings.checkingForUpdates': 'Suche nach Updates...',
     'editor.emptyLabel': 'Leere Notiz',
     'editor.emptyTitle': 'Starte mit deinen eigenen Gedanken',
     'editor.emptySubtitle': 'Schreibe direkt los. Nanki speichert im Hintergrund als Markdown und lässt dich später Dateien importieren.',
@@ -1898,6 +1918,54 @@ const applySettingsToInputs = () => {
   els.settingsAutoSync.checked = Boolean(state.settings.auto_sync);
 };
 
+const renderUpdateStatus = (info) => {
+  if (!els.updateStatus || !els.updateMeta) return;
+  
+  if (!info) {
+    els.updateStatus.textContent = t('settings.updateNotChecked');
+    els.updateMeta.innerHTML = '';
+    return;
+  }
+  
+  if (info.error) {
+    els.updateStatus.textContent = t('settings.updateCheckFailed');
+    els.updateMeta.innerHTML = `<span class="pill danger">${escapeHtml(info.error)}</span>`;
+    return;
+  }
+  
+  if (info.available) {
+    els.updateStatus.textContent = t('settings.updateAvailable', { version: info.latest_version });
+    els.updateMeta.innerHTML = [
+      `<span class="pill success">${escapeHtml(t('settings.newVersionAvailable'))}</span>`,
+      `<span class="pill">${escapeHtml(info.current_version)} → ${escapeHtml(info.latest_version)}</span>`,
+    ].join('');
+    if (els.downloadUpdateBtn) els.downloadUpdateBtn.classList.remove('hidden');
+  } else {
+    els.updateStatus.textContent = t('settings.upToDate');
+    els.updateMeta.innerHTML = `<span class="pill">${escapeHtml(info.current_version)}</span>`;
+    if (els.downloadUpdateBtn) els.downloadUpdateBtn.classList.add('hidden');
+  }
+};
+
+const checkForUpdates = async () => {
+  showLoading(t('settings.checkingForUpdates'));
+  try {
+    const result = await fetchJson('/api/update/check');
+    state.updateInfo = result;
+    renderUpdateStatus(result);
+    if (result.available) {
+      showToast(t('settings.updateAvailable', { version: result.latest_version }), 'warning');
+    } else {
+      showToast(t('settings.upToDate'), 'success');
+    }
+  } catch (error) {
+    showToast(`Update check failed: ${error.message}`, 'error');
+    renderUpdateStatus({ error: error.message });
+  } finally {
+    hideLoading();
+  }
+};
+
 const loadSettings = async () => {
   state.settings = await fetchJson('/api/settings');
   applySettingsToInputs();
@@ -3009,6 +3077,17 @@ const bindEvents = () => {
     renderAnkiStatus();
     showToast(error.message, 'error');
   }));
+  
+  // Update checker
+  if (els.checkUpdateBtn) {
+    els.checkUpdateBtn.addEventListener('click', () => checkForUpdates().catch((error) => showToast(error.message, 'error')));
+  }
+  if (els.downloadUpdateBtn) {
+    els.downloadUpdateBtn.addEventListener('click', () => {
+      showToast('Opening download page...', 'info');
+      window.open(state.updateInfo?.release_url || 'https://github.com/Xandertime2222/nanki/releases', '_blank');
+    });
+  }
 
   document.querySelectorAll('[data-close-drawer="true"]').forEach((node) => node.addEventListener('click', () => closeDrawer({ reset: true })));
   document.querySelectorAll('[data-close-settings="true"]').forEach((node) => node.addEventListener('click', closeSettingsModal));
@@ -3118,6 +3197,10 @@ const mapElements = () => {
     settingsModal: document.getElementById('settings-modal'),
     settingsCloseBtn: document.getElementById('settings-close-btn'),
     workspacePath: document.getElementById('workspace-path'),
+    updateStatus: document.getElementById('update-status'),
+    updateMeta: document.getElementById('update-meta'),
+    checkUpdateBtn: document.getElementById('check-update-btn'),
+    downloadUpdateBtn: document.getElementById('download-update-btn'),
     settingsLanguage: document.getElementById('settings-language'),
     settingsAnkiUrl: document.getElementById('settings-anki-url'),
     settingsAutoSync: document.getElementById('settings-auto-sync'),
@@ -3180,6 +3263,18 @@ const init = async () => {
       state.lastActivity = Date.now();
     }, { passive: true });
   });
+  
+  // Check for updates in background after 3 seconds
+  setTimeout(() => {
+    fetchJson('/api/update/check')
+      .then((result) => {
+        state.updateInfo = result;
+        renderUpdateStatus(result);
+      })
+      .catch(() => {
+        // Silent fail on startup check
+      });
+  }, 3000);
   
   console.log('[Nanki] Ready!');
 };
