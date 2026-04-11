@@ -211,7 +211,7 @@
                   <h4 data-i18n="coverage.title">Flashcard coverage</h4>
                   <p id="coverage-summary-text" class="muted" aria-live="polite">No cards linked yet.</p>
                 </div>
-                <button id="refresh-coverage-btn" data-i18n="coverage.refresh" aria-label="Refresh coverage analysis">Refresh</button>
+                <button id="refresh-coverage-btn" class="primary" data-i18n="coverage.refresh" aria-label="Refresh coverage analysis">Analyze</button>
               </div>
 
               <div class="coverage-hero" role="img" aria-label="Coverage progress">
@@ -220,96 +220,68 @@
                 <div id="coverage-stat-pills" class="stat-pills"></div>
               </div>
 
-              <!-- APCG Mode Selector -->
-              <div class="apcg-mode-selector" style="margin: 16px 0; padding: 12px; background: #f8fafc; border-radius: 8px;">
-                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                  <span style="font-size: 12px; font-weight: 600; color: #64748b;">🤖 APCG Analysis Mode:</span>
-                  <span id="apcg-detected-mode" class="text-xs px-2 py-1 rounded bg-blue-100 text-blue-700" style="display: none;"></span>
-                </div>
-                <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-                  <button class="apcg-mode-btn active" data-mode="auto" type="button" title="Auto-detect content type">🤖 Auto</button>
-                  <button class="apcg-mode-btn" data-mode="facts" type="button" title="History, Geography, Events">📜 Facts</button>
-                  <button class="apcg-mode-btn" data-mode="process" type="button" title="Biology, Medicine, Chemistry">🔬 Process</button>
-                  <button class="apcg-mode-btn" data-mode="definition" type="button" title="Vocabulary, Concepts">📖 Definition</button>
-                  <button class="apcg-mode-btn" data-mode="universal" type="button" title="Mixed content">🌐 Universal</button>
-                </div>
-                <div style="margin-top: 8px; font-size: 11px; color: #64748b;">
-                  <span id="apcg-mode-hint">Auto-detects the best analysis mode for your content</span>
-                </div>
+              <div class="coverage-section">
+                <h5 data-i18n="coverage.gapsTitle">Gaps</h5>
+                <div id="coverage-gaps" class="coverage-list" role="list" aria-label="Coverage gaps"></div>
               </div>
 
-              <!-- APCG Coverage Section -->
-              <div id="apcg-coverage-section" class="apcg-coverage-section" style="margin-top: 16px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                  <h5 style="margin: 0; font-size: 14px; color: #1e293b;">📊 APCG Detailed Analysis</h5>
-                  <button id="run-apcg-analysis-btn" class="primary" type="button" style="font-size: 12px; padding: 6px 12px;">Run APCG Analysis</button>
+              <div class="coverage-section">
+                <h5 data-i18n="coverage.conflictsTitle">Conflicts</h5>
+                <div id="coverage-conflicts" class="coverage-list" role="list" aria-label="Coverage conflicts"></div>
+              </div>
+
+              <!-- APCG Coverage Section - Integrated with existing coverage system -->
+              <div id="apcg-coverage-section" class="apcg-coverage-section">
+                <div class="apcg-section-header">
+                  <h5 class="apcg-section-title">📊 Detailed Analysis</h5>
+                  <button id="run-apcg-analysis-btn" class="primary" type="button">Analyze</button>
                 </div>
                 
                 <!-- APCG Summary Cards -->
-                <div id="apcg-summary-cards" class="apcg-summary-cards" style="display: none; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px;">
-                  <div class="apcg-stat-card" style="padding: 12px; background: #f1f5f9; border-radius: 8px; text-align: center;">
-                    <div id="apcg-stat-propositions" class="text-2xl font-bold" style="font-size: 24px; font-weight: 700; color: #1e293b;">0</div>
-                    <div style="font-size: 11px; color: #64748b; margin-top: 4px;">Propositions</div>
+                <div id="apcg-summary-cards" class="apcg-summary-cards">
+                  <div class="apcg-stat-card">
+                    <div id="apcg-stat-propositions" class="apcg-stat-value">0</div>
+                    <div class="apcg-stat-label">Propositions</div>
                   </div>
-                  <div class="apcg-stat-card" style="padding: 12px; background: #dcfce7; border-radius: 8px; text-align: center;">
-                    <div id="apcg-stat-covered" class="text-2xl font-bold" style="font-size: 24px; font-weight: 700; color: #166534;">0</div>
-                    <div style="font-size: 11px; color: #166534; margin-top: 4px;">Covered</div>
+                  <div class="apcg-stat-card apcg-stat-covered">
+                    <div id="apcg-stat-covered" class="apcg-stat-value">0</div>
+                    <div class="apcg-stat-label">Covered</div>
                   </div>
-                  <div class="apcg-stat-card" style="padding: 12px; background: #fee2e2; border-radius: 8px; text-align: center;">
-                    <div id="apcg-stat-uncovered" class="text-2xl font-bold" style="font-size: 24px; font-weight: 700; color: #991b1b;">0</div>
-                    <div style="font-size: 11px; color: #991b1b; margin-top: 4px;">Uncovered</div>
+                  <div class="apcg-stat-card apcg-stat-uncovered">
+                    <div id="apcg-stat-uncovered" class="apcg-stat-value">0</div>
+                    <div class="apcg-stat-label">Uncovered</div>
                   </div>
-                  <div class="apcg-stat-card" style="padding: 12px; background: #fef3c7; border-radius: 8px; text-align: center;">
-                    <div id="apcg-stat-conflicts" class="text-2xl font-bold" style="font-size: 24px; font-weight: 700; color: #92400e;">0</div>
-                    <div style="font-size: 11px; color: #92400e; margin-top: 4px;">Conflicts</div>
-                  </div>
-                </div>
-
-                <!-- APCG Coverage Bar -->
-                <div id="apcg-coverage-bar-container" style="display: none; margin-bottom: 16px;">
-                  <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
-                    <span style="font-size: 13px; font-weight: 600; color: #475569;">Core Coverage</span>
-                    <span id="apcg-coverage-level" style="font-size: 12px; padding: 2px 8px; border-radius: 4px; background: #e2e8f0; color: #475569;">-</span>
-                  </div>
-                  <div style="width: 100%; height: 20px; background: #e2e8f0; border-radius: 6px; overflow: hidden;">
-                    <div id="apcg-coverage-bar-fill" style="width: 0%; height: 100%; background: linear-gradient(90deg, #ef4444 0%, #eab308 50%, #22c55e 100%); transition: width 0.5s ease;"></div>
-                  </div>
-                  <div style="text-align: right; margin-top: 4px; font-size: 12px; color: #64748b;">
-                    <span id="apcg-coverage-percent">0%</span> core, <span id="apcg-exact-coverage-percent">0%</span> exact
+                  <div class="apcg-stat-card apcg-stat-conflicts">
+                    <div id="apcg-stat-conflicts" class="apcg-stat-value">0</div>
+                    <div class="apcg-stat-label">Conflicts</div>
                   </div>
                 </div>
 
-                <!-- APCG Results Tabs -->
-                <div id="apcg-results-container" style="display: none;">
-                  <div class="apcg-tabs" style="display: flex; gap: 8px; border-bottom: 2px solid #e2e8f0; margin-bottom: 12px;">
-                    <button class="apcg-tab-btn active" data-tab="all" type="button" style="padding: 8px 12px; background: none; border: none; border-bottom: 2px solid #3b82f6; color: #3b82f6; font-weight: 600; cursor: pointer;">All</button>
-                    <button class="apcg-tab-btn" data-tab="covered" type="button" style="padding: 8px 12px; background: none; border: none; border-bottom: 2px solid transparent; color: #64748b; cursor: pointer;">Covered</button>
-                    <button class="apcg-tab-btn" data-tab="uncovered" type="button" style="padding: 8px 12px; background: none; border: none; border-bottom: 2px solid transparent; color: #64748b; cursor: pointer;">Uncovered</button>
+                <!-- APCG Results -->
+                <div id="apcg-results-container" class="apcg-results-container">
+                  <div class="apcg-tabs">
+                    <button class="apcg-tab-btn active" data-tab="all" type="button">All</button>
+                    <button class="apcg-tab-btn" data-tab="covered" type="button">Covered</button>
+                    <button class="apcg-tab-btn" data-tab="uncovered" type="button">Uncovered</button>
                   </div>
                   
                   <div id="apcg-tab-all" class="apcg-tab-content"></div>
-                  <div id="apcg-tab-covered" class="apcg-tab-content" style="display: none;"></div>
-                  <div id="apcg-tab-uncovered" class="apcg-tab-content" style="display: none;"></div>
+                  <div id="apcg-tab-covered" class="apcg-tab-content"></div>
+                  <div id="apcg-tab-uncovered" class="apcg-tab-content"></div>
                 </div>
 
                 <!-- Loading State -->
-                <div id="apcg-loading" style="display: none; text-align: center; padding: 40px;">
-                  <div class="loading-spinner" style="width: 40px; height: 40px; border: 3px solid #e2e8f0; border-top-color: #3b82f6; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 16px;"></div>
-                  <p style="color: #64748b; font-size: 14px;">Analyzing coverage with APCG...</p>
+                <div id="apcg-loading" class="apcg-loading">
+                  <div class="loading-spinner"></div>
+                  <p class="apcg-loading-text">Analyzing...</p>
                 </div>
 
                 <!-- Empty State -->
-                <div id="apcg-empty-state" style="display: block; text-align: center; padding: 40px; color: #64748b;">
-                  <p style="font-size: 14px; margin-bottom: 8px;">Click "Run APCG Analysis" to get detailed coverage insights</p>
-                  <p style="font-size: 12px;">Identifies gaps, conflicts, and uncovered topics using AI-powered analysis</p>
+                <div id="apcg-empty-state" class="apcg-empty-state">
+                  <p style="font-size: 14px;">Click "Analyze" to analyze your note</p>
                 </div>
               </div>
-
-              <div class="coverage-columns">
-                <section>
-                  <div class="section-label" data-i18n="coverage.bySection">By section</div>
-                  <div id="coverage-sections" class="coverage-list"></div>
-                </section>
+            </section>
                 <section>
                   <div class="section-label-row">
                     <div class="section-label" data-i18n="coverage.largestGaps">Largest gaps</div>
@@ -506,18 +478,8 @@
             <div class="panel-head inline-bottom-gap">
               <div>
                 <h4>🤖 AI Prompts</h4>
-                <p class="muted">Flashcard generation prompts with evidence-based best practices.</p>
+                <p class="muted">Flashcard generation prompts.</p>
               </div>
-            </div>
-            <div class="inline-bottom-gap">
-              <p class="text-sm" style="color: var(--muted); font-size: 13px; line-height: 1.6;">
-                The current prompts include research-backed principles for optimal long-term retention:
-                <br>• <strong>Atomic cards</strong> (1 idea per card, max 9 words)
-                <br>• <strong>Simple prompts</strong> (clear, direct questions)
-                <br>• <strong>No card overload</strong> (max 18 words total)
-                <br>• <strong>Full coverage</strong> (all important concepts)
-                <br>• <strong>Mnemonics & examples</strong> (when helpful)
-              </p>
             </div>
             <div class="toolbar-group compact-top-gap">
               <button id="reset-prompts-btn" class="primary" type="button" style="width: 100%;">
@@ -526,6 +488,42 @@
               </button>
             </div>
             <div id="reset-prompts-status" class="settings-status-text" style="margin-top: 12px; font-size: 13px;"></div>
+          </section>
+
+          <section class="card-surface nested-card">
+            <div class="panel-head inline-bottom-gap">
+              <div>
+                <h4>📊 APCG Analysis</h4>
+                <p class="muted">Advanced Propositional Coverage Graph settings</p>
+              </div>
+            </div>
+            <div class="settings-form-grid">
+              <label>
+                <span>Default Analysis Mode</span>
+                <select id="apcg-default-mode">
+                  <option value="auto">🤖 Auto-detect</option>
+                  <option value="facts">📜 Facts mode</option>
+                  <option value="process">🔬 Process mode</option>
+                  <option value="definition">📖 Definition mode</option>
+                  <option value="universal">🌐 Universal mode</option>
+                </select>
+              </label>
+              <label class="checkbox-row wide">
+                <input id="apcg-include-anki" type="checkbox" checked />
+                <span>Include Anki cards in analysis</span>
+              </label>
+              <label class="checkbox-row wide">
+                <input id="apcg-auto-refresh" type="checkbox" />
+                <span>Auto-refresh on note changes</span>
+              </label>
+            </div>
+            <div class="toolbar-group compact-top-gap">
+              <button id="reset-apcg-btn" class="ghost" type="button" style="width: 100%;">
+                <span style="font-size: 16px; margin-right: 6px;">🔄</span>
+                Reset APCG Settings
+              </button>
+            </div>
+            <div id="reset-apcg-status" class="settings-status-text" style="margin-top: 12px; font-size: 13px;"></div>
           </section>
         </div>
       </div>

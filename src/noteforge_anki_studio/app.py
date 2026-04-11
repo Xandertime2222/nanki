@@ -14,7 +14,13 @@ from .ai import AIConfigurationError, AIService, AIServiceError
 from .anki_connect import AnkiConnectClient, AnkiConnectError
 from .config import SettingsManager
 from .coverage import build_note_coverage
-from .coverage_apcg import apcg_coverage, coverage_summary, CoverageConfig, CoverageMode, detect_text_type
+from .coverage_apcg import (
+    apcg_coverage,
+    coverage_summary,
+    CoverageConfig,
+    CoverageMode,
+    detect_text_type,
+)
 from .exporters import CardExporter
 from .importers import ImportService, UnsupportedImportError
 from .updater import is_update_available
@@ -91,45 +97,46 @@ async def update_state(payload: AppState) -> AppState:
 async def check_for_updates() -> dict:
     """Check GitHub for latest release"""
     import httpx
+
     current_version = "0.5.0"
-    
+
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             response = await client.get(
                 "https://api.github.com/repos/Xandertime2222/nanki/releases/latest",
-                headers={"Accept": "application/vnd.github+json"}
+                headers={"Accept": "application/vnd.github+json"},
             )
             if response.status_code == 200:
                 release = response.json()
                 latest_version = release.get("tag_name", "v0.0.0").lstrip("v")
-                
+
                 def parse_version(v: str) -> tuple:
                     parts = v.split(".")
                     return tuple(int(p) for p in parts[:3] if p.isdigit())
-                
+
                 current_tuple = parse_version(current_version)
                 latest_tuple = parse_version(latest_version)
-                
+
                 has_update = latest_tuple > current_tuple
-                
+
                 return {
                     "current_version": current_version,
                     "latest_version": latest_version,
                     "has_update": has_update,
                     "release_url": release.get("html_url", ""),
                     "release_notes": release.get("body", ""),
-                    "checked_at": utc_now_iso()
+                    "checked_at": utc_now_iso(),
                 }
     except Exception as e:
         pass
-    
+
     return {
         "current_version": current_version,
         "latest_version": current_version,
         "has_update": False,
         "release_url": "",
         "release_notes": "",
-        "checked_at": utc_now_iso()
+        "checked_at": utc_now_iso(),
     }
 
 
@@ -144,25 +151,60 @@ async def update_workspace(payload: WorkspaceUpdateRequest) -> AppSettings:
 async def reset_prompts() -> dict:
     """Reset AI prompts to default values with evidence-based best practices."""
     from . import prompts
-    
-    settings = settings_manager.load()
-    
-    # Reset to default prompts (which now include evidence-based best practices)
-    settings.ai.chat_system_prompt = prompts.DEFAULT_CHAT_SYSTEM_PROMPT
-    settings.ai.explain_system_prompt = prompts.DEFAULT_EXPLAIN_SYSTEM_PROMPT
-    settings.ai.flashcard_system_prompt = prompts.DEFAULT_FLASHCARD_SYSTEM_PROMPT
-    settings.ai.auto_flashcard_system_prompt = prompts.DEFAULT_AUTO_FLASHCARD_SYSTEM_PROMPT
-    
-    settings_manager.save(settings)
-    
-    return {
-        "status": "success",
-        "message": "Prompts reset to default with evidence-based best practices",
-        "prompts": {
-            "flashcard": prompts.DEFAULT_FLASHCARD_SYSTEM_PROMPT,
-            "auto_flashcard": prompts.DEFAULT_AUTO_FLASHCARD_SYSTEM_PROMPT,
+
+    try:
+        settings = settings_manager.load()
+
+        # Reset to default prompts (which now include evidence-based best practices)
+        settings.ai.chat_system_prompt = prompts.DEFAULT_CHAT_SYSTEM_PROMPT
+        settings.ai.explain_system_prompt = prompts.DEFAULT_EXPLAIN_SYSTEM_PROMPT
+        settings.ai.flashcard_system_prompt = prompts.DEFAULT_FLASHCARD_SYSTEM_PROMPT
+        settings.ai.auto_flashcard_system_prompt = (
+            prompts.DEFAULT_AUTO_FLASHCARD_SYSTEM_PROMPT
+        )
+
+        settings_manager.save(settings)
+
+        return {
+            "status": "success",
+            "message": "Prompts reset to default with evidence-based best practices",
+            "prompts": {
+                "flashcard": prompts.DEFAULT_FLASHCARD_SYSTEM_PROMPT,
+                "auto_flashcard": prompts.DEFAULT_AUTO_FLASHCARD_SYSTEM_PROMPT,
+            },
         }
-    }
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to reset prompts: {str(exc)}"
+        )
+
+
+@app.post("/api/settings/apcg/reset")
+async def reset_apcg_settings() -> dict:
+    """Reset APCG settings to default values."""
+    from .models import APCGSettings
+
+    try:
+        settings = settings_manager.load()
+
+        # Reset to default APCG settings
+        settings.apcg = APCGSettings()
+
+        settings_manager.save(settings)
+
+        return {
+            "status": "success",
+            "message": "APCG settings reset to default",
+            "apcg": {
+                "default_mode": settings.apcg.default_mode,
+                "include_anki_cards": settings.apcg.include_anki_cards,
+                "auto_refresh": settings.apcg.auto_refresh,
+            },
+        }
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to reset APCG settings: {str(exc)}"
+        )
 
 
 @app.get("/api/notes")
@@ -296,22 +338,104 @@ async def get_source_file(note_id: str, filename: str) -> FileResponse:
 
 
 @app.get("/api/notes/{note_id}/coverage")
-async def get_note_coverage(note_id: str) -> dict:
+async def get_note_coverage(
+    note_id: str, mode: str = "auto", include_anki_cards: bool = True
+) -> dict:
+    """Analyze note coverage using APCG algorithm."""
+    from .coverage_apcg import apcg_coverage, CoverageConfig, CoverageMode
+
     try:
         note = store.load_note(note_id)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-    anki_status = {"available": False, "error": None}
-    external_cards = []
-    try:
-        external_cards = await anki_client.fetch_all_cards_for_coverage()
-        anki_status["available"] = True
-    except (AnkiConnectError, Exception) as exc:
-        anki_status["error"] = str(exc)
-    return build_note_coverage(
-        note, external_cards=external_cards, anki_status=anki_status
+    content = note.document.content or ""
+    if not content.strip():
+        return {
+            "total_core_coverage": 0,
+            "total_exact_coverage": 0,
+            "total_propositions": 0,
+            "uncovered_count": 0,
+            "propositions": [],
+            "conflicts": [],
+        }
+
+    cards = []
+    for card in note.cards:
+        cards.append(
+            {
+                "id": card.id,
+                "front": card.front or "",
+                "back": card.back or "",
+                "extra": card.extra or "",
+            }
+        )
+
+    if include_anki_cards:
+        try:
+            anki_cards = await anki_client.get_cards_for_note(
+                note.document.title or note_id
+            )
+            for ac in anki_cards:
+                cards.append(
+                    {
+                        "id": f"anki:{ac.get('cardId', '')}",
+                        "front": ac.get("fields", {}).get("Front", ""),
+                        "back": ac.get("fields", {}).get("Back", ""),
+                        "extra": ac.get("fields", {}).get("Extra", ""),
+                    }
+                )
+        except Exception:
+            pass
+
+    mode_map = {
+        "auto": CoverageMode.AUTO,
+        "facts": CoverageMode.FACTS,
+        "process": CoverageMode.PROCESS,
+        "definition": CoverageMode.DEFINITION,
+        "universal": CoverageMode.UNIVERSAL,
+    }
+    coverage_mode = mode_map.get(mode.lower(), CoverageMode.AUTO)
+    config = CoverageConfig(
+        mode=coverage_mode, auto_detect=(coverage_mode == CoverageMode.AUTO)
     )
+    result = apcg_coverage(content, cards, config)
+
+    response = {
+        "detected_mode": result.detected_mode,
+        "total_core_coverage": result.total_core,
+        "total_exact_coverage": result.total_exact,
+        "total_propositions": len(result.propositions),
+        "uncovered_count": len(result.uncovered_propositions),
+        "conflicts": [],
+        "propositions": [],
+    }
+
+    for pc in result.propositions:
+        prop_data = {
+            "id": pc.proposition.id,
+            "text": pc.proposition.text,
+            "type": pc.proposition.proposition_type,
+            "core_score": pc.core_score,
+            "exact_score": pc.exact_score,
+            "matched": len(pc.matched_evidence) > 0,
+            "match_method": pc.match_method,
+            "front_back_match": pc.front_back_match,
+            "uncovered_slots": pc.uncovered_slots,
+            "matched_card_ids": [ev.card_id for ev in pc.matched_evidence],
+        }
+        response["propositions"].append(prop_data)
+
+    for card_id, score in result.conflicting_cards:
+        response["conflicts"].append(
+            {
+                "card_id": card_id,
+                "conflict_score": score,
+                "description": f"Card {card_id} has conflicting coverage",
+            }
+        )
+
+    return response
 
 
 @app.post("/api/render-markdown")
@@ -543,22 +667,24 @@ async def analyze_coverage_apcg(
         note = store.load_note(note_id)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    
+
     # Get note content
     content = note.document.content or ""
     if not content.strip():
         return {"error": "Note content is empty"}
-    
+
     # Build cards list from note
     cards = []
     for card in note.cards:
-        cards.append({
-            "id": card.id,
-            "front": card.front or "",
-            "back": card.back or "",
-            "extra": card.extra or "",
-        })
-    
+        cards.append(
+            {
+                "id": card.id,
+                "front": card.front or "",
+                "back": card.back or "",
+                "extra": card.extra or "",
+            }
+        )
+
     # Also fetch Anki cards if requested
     if include_anki_cards:
         try:
@@ -566,15 +692,17 @@ async def analyze_coverage_apcg(
                 note.document.title or note_id
             )
             for ac in anki_cards:
-                cards.append({
-                    "id": f"anki:{ac.get('cardId', '')}",
-                    "front": ac.get('fields', {}).get('Front', ''),
-                    "back": ac.get('fields', {}).get('Back', ''),
-                    "extra": ac.get('fields', {}).get('Extra', ''),
-                })
+                cards.append(
+                    {
+                        "id": f"anki:{ac.get('cardId', '')}",
+                        "front": ac.get("fields", {}).get("Front", ""),
+                        "back": ac.get("fields", {}).get("Back", ""),
+                        "extra": ac.get("fields", {}).get("Extra", ""),
+                    }
+                )
         except Exception:
             pass  # Ignore Anki errors, just use local cards
-    
+
     # Map mode string to enum
     mode_map = {
         "auto": CoverageMode.AUTO,
@@ -584,11 +712,13 @@ async def analyze_coverage_apcg(
         "universal": CoverageMode.UNIVERSAL,
     }
     coverage_mode = mode_map.get(mode.lower(), CoverageMode.AUTO)
-    
+
     # Run APCG analysis
-    config = CoverageConfig(mode=coverage_mode, auto_detect=(coverage_mode == CoverageMode.AUTO))
+    config = CoverageConfig(
+        mode=coverage_mode, auto_detect=(coverage_mode == CoverageMode.AUTO)
+    )
     result = apcg_coverage(content, cards, config)
-    
+
     # Build response
     response = {
         "detected_mode": result.detected_mode,
@@ -602,7 +732,7 @@ async def analyze_coverage_apcg(
         "conflicts": [],
         "span_scores": result.span_scores,
     }
-    
+
     # Add proposition details
     for pc in result.propositions:
         prop_data = {
@@ -618,22 +748,26 @@ async def analyze_coverage_apcg(
             "matched_card_ids": [ev.card_id for ev in pc.matched_evidence],
         }
         response["propositions"].append(prop_data)
-    
+
     # Add uncovered propositions
     for prop in result.uncovered_propositions:
-        response["uncovered"].append({
-            "id": prop.id,
-            "text": prop.text,
-            "type": prop.proposition_type,
-        })
-    
+        response["uncovered"].append(
+            {
+                "id": prop.id,
+                "text": prop.text,
+                "type": prop.proposition_type,
+            }
+        )
+
     # Add conflicts
     for card_id, score in result.conflicting_cards:
-        response["conflicts"].append({
-            "card_id": card_id,
-            "conflict_score": score,
-        })
-    
+        response["conflicts"].append(
+            {
+                "card_id": card_id,
+                "conflict_score": score,
+            }
+        )
+
     return response
 
 
@@ -644,10 +778,13 @@ async def get_coverage_summary(note_id: str, mode: str = "auto") -> dict:
         note = store.load_note(note_id)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    
+
     content = note.document.content or ""
-    cards = [{"id": c.id, "front": c.front, "back": c.back, "extra": c.extra} for c in note.cards]
-    
+    cards = [
+        {"id": c.id, "front": c.front, "back": c.back, "extra": c.extra}
+        for c in note.cards
+    ]
+
     mode_map = {
         "auto": CoverageMode.AUTO,
         "facts": CoverageMode.FACTS,
@@ -657,16 +794,20 @@ async def get_coverage_summary(note_id: str, mode: str = "auto") -> dict:
     }
     coverage_mode = mode_map.get(mode.lower(), CoverageMode.AUTO)
     config = CoverageConfig(mode=coverage_mode)
-    
+
     result = apcg_coverage(content, cards, config)
-    
+
     return {
         "detected_mode": result.detected_mode,
         "core_coverage": round(result.total_core * 100, 1),
         "exact_coverage": round(result.total_exact * 100, 1),
         "propositions_count": len(result.propositions),
         "uncovered_count": len(result.uncovered_propositions),
-        "coverage_level": "high" if result.total_core > 0.6 else "medium" if result.total_core > 0.3 else "low",
+        "coverage_level": "high"
+        if result.total_core > 0.6
+        else "medium"
+        if result.total_core > 0.3
+        else "low",
     }
 
 

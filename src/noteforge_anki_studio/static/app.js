@@ -33,7 +33,7 @@ const state = {
     sourceLocator: '',
     anchor: null,
   },
-  hasSeenTour: false,
+
   drawer: {
     open: false,
     editingId: null,
@@ -795,13 +795,33 @@ const renderEditorCoverageView = () => {
     return;
   }
   els.editorCoverageView.classList.remove('hidden');
-  const html = state.coverageReport?.coverage_html || '';
-  els.editorCoverageView.innerHTML = html || `<div class="editor-coverage-empty"><span class="section-label">${escapeHtml(t('coverage.title'))}</span><div class="coverage-muted-empty">${escapeHtml(t('coverage.editorEmpty'))}</div></div>`;
-
-  els.editorCoverageView.addEventListener('mouseover', showCoverageTooltip);
-  els.editorCoverageView.addEventListener('mouseout', (e) => {
-    if (!e.relatedTarget?.closest?.('.coverage-token.covered')) removeCoverageTooltip();
-  });
+  
+  const report = state.coverageReport;
+  if (report && report.propositions) {
+    const covered = report.propositions.filter(p => p.matched);
+    const uncovered = report.propositions.filter(p => !p.matched);
+    const corePercent = Math.round((report.total_core_coverage || 0) * 100);
+    
+    els.editorCoverageView.innerHTML = `
+      <div class="editor-coverage-summary">
+        <div class="editor-coverage-stat">
+          <span class="stat-value">${report.total_propositions || 0}</span>
+          <span class="stat-label">Propositions</span>
+        </div>
+        <div class="editor-coverage-stat">
+          <span class="stat-value success">${covered.length}</span>
+          <span class="stat-label">Covered</span>
+        </div>
+        <div class="editor-coverage-stat">
+          <span class="stat-value danger">${uncovered.length}</span>
+          <span class="stat-label">Gaps</span>
+        </div>
+        <div class="editor-coverage-percent">${corePercent}%</div>
+      </div>
+    `;
+  } else {
+    els.editorCoverageView.innerHTML = `<div class="editor-coverage-empty"><span class="section-label">${escapeHtml(t('coverage.title'))}</span><div class="coverage-muted-empty">Click "Analyze" to analyze coverage</div></div>`;
+  }
 
   updateCoverageToggleButton();
   updateEditorEmptyState();
@@ -1378,128 +1398,66 @@ const rangeContextWithinRoot = (range, root) => {
 const renderCoveragePanel = () => {
   const report = state.coverageReport;
   if (!report) {
-    els.coveragePercent.textContent = '0%';
-    els.coverageSummaryText.textContent = t('coverage.noNoteLoaded');
-    els.coverageBarFill.style.width = '0%';
-    els.coverageStatPills.innerHTML = '';
-    els.coverageSections.innerHTML = `<div class="coverage-muted-empty">${escapeHtml(t('coverage.noSectionData'))}</div>`;
-    els.coverageGaps.innerHTML = `<div class="coverage-muted-empty">${escapeHtml(t('coverage.noGaps'))}</div>`;
-    els.coverageUnmapped.innerHTML = `<div class="coverage-muted-empty">${escapeHtml(t('coverage.noCardMapping'))}</div>`;
-    if (els.coverageAnkiMatches) {
-      els.coverageAnkiMatches.innerHTML = `<div class="coverage-muted-empty">${escapeHtml(t('coverage.ankiUnavailable'))}</div>`;
-    }
+    if (els.coveragePercent) els.coveragePercent.textContent = '0%';
+    if (els.coverageSummaryText) els.coverageSummaryText.textContent = 'No analysis yet';
+    if (els.coverageBarFill) els.coverageBarFill.style.width = '0%';
+    if (els.coverageStatPills) els.coverageStatPills.innerHTML = '';
+    if (els.coverageGaps) els.coverageGaps.innerHTML = '<div class="coverage-muted-empty">No gaps detected</div>';
+    if (els.coverageConflicts) els.coverageConflicts.innerHTML = '<div class="coverage-muted-empty">No conflicts</div>';
     renderEditorCoverageView();
     return;
   }
 
-  const stats = report.stats || {};
-  const anki = report.anki || {};
-  const coveragePercent = Number(stats.coverage_percent || 0);
-  const totalMapped = Number(stats.coverage_card_count ?? stats.mapped_cards ?? 0);
-  els.coveragePercent.textContent = `${coveragePercent.toFixed(1)}%`;
-  els.coverageSummaryText.textContent = t('coverage.summary', {
-    covered: stats.covered_words || 0,
-    total: stats.total_words || 0,
-    mapped: totalMapped,
-  });
-  els.coverageBarFill.style.width = `${Math.max(0, Math.min(100, coveragePercent))}%`;
-  const ankiPill = anki.available
-    ? `<span class="pill success">${escapeHtml(t('coverage.ankiMatched', { count: anki.matched_cards || 0 }))}</span>`
-    : `<span class="pill warning">${escapeHtml(t('coverage.ankiUnavailable'))}</span>`;
-  els.coverageStatPills.innerHTML = [
-    `<span class="pill">${escapeHtml(t('coverage.totalCards', { count: stats.total_cards || 0 }))}</span>`,
-    `<span class="pill success">${escapeHtml(t('coverage.mapped', { count: stats.local_mapped_cards || 0 }))}</span>`,
-    `<span class="pill warning">${escapeHtml(t('coverage.unmapped', { count: stats.unmapped_cards || 0 }))}</span>`,
-    ankiPill,
-  ].join('');
+  const corePercent = Math.round((report.total_core_coverage || 0) * 100);
+  const covered = (report.total_propositions || 0) - (report.uncovered_count || 0);
+  const totalProps = report.total_propositions || 0;
+  
+  if (els.coveragePercent) els.coveragePercent.textContent = `${corePercent}%`;
+  if (els.coverageSummaryText) els.coverageSummaryText.textContent = `${totalProps} propositions analyzed`;
+  if (els.coverageBarFill) els.coverageBarFill.style.width = `${Math.max(0, Math.min(100, corePercent))}%`;
+  
+  if (els.coverageStatPills) {
+    els.coverageStatPills.innerHTML = [
+      `<span class="pill">✓ ${covered} covered</span>`,
+      `<span class="pill danger">✗ ${report.uncovered_count || 0} gaps</span>`,
+      report.conflicts?.length ? `<span class="pill warning">⚠ ${report.conflicts.length} conflicts</span>` : '',
+    ].filter(Boolean).join('');
+  }
 
-  const sections = report.sections || [];
-  els.coverageSections.innerHTML = sections.length
-    ? sections
-        .map(
-          (section) => `
-            <div class="coverage-list-item">
-              <div class="coverage-list-item-header">
-                <strong>${escapeHtml(section.title)}</strong>
-                <span class="pill">${Number(section.coverage_percent || 0).toFixed(1)}%</span>
-              </div>
-              <div class="coverage-mini-row muted">
-                <span>${escapeHtml(t('coverage.sectionWords', { covered: section.covered_words || 0, total: section.total_words || 0 }))}</span>
-                <span>${escapeHtml(t('coverage.sectionCards', { count: (section.card_ids || []).length }))}</span>
-              </div>
-              <div class="coverage-mini-bar"><span style="width:${Math.max(0, Math.min(100, Number(section.coverage_percent || 0)))}%"></span></div>
+  if (els.coverageGaps) {
+    const gaps = report.propositions?.filter(p => !p.matched) || [];
+    els.coverageGaps.innerHTML = gaps.length
+      ? gaps.slice(0, 10).map((gap) => `
+          <div class="coverage-list-item">
+            <div class="coverage-list-item-header">
+              <strong style="font-size: 12px;">${escapeHtml(gap.text.substring(0, 80))}${gap.text.length > 80 ? '...' : ''}</strong>
+              <span class="apcg-prop-type" style="font-size: 10px;">${gap.type}</span>
             </div>
-          `,
-        )
-        .join('')
-    : `<div class="coverage-muted-empty">${escapeHtml(t('coverage.noSectionData'))}</div>`;
+            <button class="ghost" style="font-size: 11px; margin-top: 4px;" onclick="suggestCardForProposition('${gap.id}', '${escapeHtml(gap.text).replace(/'/g, "\\'")}')">
+              + Suggest card
+            </button>
+          </div>
+        `).join('')
+      : '<div class="coverage-muted-empty">No gaps detected</div>';
+  }
 
-  const gaps = report.gaps || [];
-  els.coverageGaps.innerHTML = gaps.length
-    ? gaps
-        .map(
-          (gap) => `
-            <div class="coverage-list-item">
-              <div class="coverage-list-item-header">
-                <strong>${escapeHtml(gap.section_title || 'Gap')}</strong>
-                <span class="pill warning">${escapeHtml(t('coverage.gapWords', { count: gap.word_count || 0 }))}</span>
-              </div>
-              <div class="muted">${escapeHtml(gap.excerpt || '')}</div>
+  if (els.coverageConflicts) {
+    const conflicts = report.conflicts || [];
+    els.coverageConflicts.innerHTML = conflicts.length
+      ? conflicts.map((c) => `
+          <div class="coverage-list-item" style="border-left-color: var(--warning);">
+            <div class="coverage-list-item-header">
+              <strong style="font-size: 12px;">${escapeHtml(c.description || 'Conflict detected')}</strong>
             </div>
-          `,
-        )
-        .join('')
-    : `<div class="coverage-muted-empty">${escapeHtml(t('coverage.everythingCovered'))}</div>`;
-
-  const unmappedCards = (report.cards || []).filter((card) => card.origin !== 'anki' && !card.mapped);
-  els.coverageUnmapped.innerHTML = unmappedCards.length
-    ? unmappedCards
-        .map(
-          (card) => `
-            <div class="coverage-list-item">
-              <div class="coverage-list-item-header">
-                <strong>${escapeHtml((card.front || 'Untitled card').slice(0, 72))}</strong>
-                <span class="pill warning">${escapeHtml(t('cards.unmapped'))}</span>
-              </div>
-              <div class="muted">${escapeHtml(card.source_locator || card.selected_text || t('coverage.noSourceReference'))}</div>
-            </div>
-          `,
-        )
-        .join('')
-    : `<div class="coverage-muted-empty">${escapeHtml(t('coverage.allMapped'))}</div>`;
-
-  if (els.coverageAnkiMatches) {
-    const ankiMatches = (report.cards || []).filter((card) => card.origin === 'anki' && card.mapped);
-    els.coverageAnkiMatches.innerHTML = ankiMatches.length
-      ? ankiMatches
-          .map(
-            (card) => `
-              <div class="coverage-list-item">
-                <div class="coverage-list-item-header">
-                  <strong>${escapeHtml((card.front || 'Anki').slice(0, 72))}</strong>
-                  <span class="pill success">${escapeHtml(card.deck_name || 'Anki')}</span>
-                </div>
-                <div class="coverage-mini-row muted">
-                  <span>${escapeHtml(card.section_title || t('unit.none'))}</span>
-                  <span>${escapeHtml(t('cards.mappedWords', { count: card.covered_words || 0 }))}</span>
-                </div>
-              </div>
-            `,
-          )
-          .join('')
-      : `<div class="coverage-muted-empty">${escapeHtml(anki.available ? t('coverage.noAnkiMatches') : (anki.error || t('coverage.ankiUnavailable')))}</div>`;
-    if (anki.available && anki.total_cards) {
-      els.coverageAnkiMatches.insertAdjacentHTML(
-        'afterbegin',
-        `<div class="coverage-list-item"><div class="coverage-list-item-header"><strong>${escapeHtml(t('coverage.ankiScanned', { count: anki.total_cards || 0 }))}</strong><span class="pill">${escapeHtml(t('coverage.ankiMatched', { count: anki.matched_cards || 0 }))}</span></div></div>`,
-      );
-    }
+          </div>
+        `).join('')
+      : '<div class="coverage-muted-empty">No conflicts</div>';
   }
 
   renderEditorCoverageView();
 };
 
-const coverageCardMap = () => Object.fromEntries(((state.coverageReport?.cards) || []).map((card) => [card.id, card]));
+const coverageCardMap = () => Object.fromEntries(((state.coverageReport?.propositions) || []).map((p) => [p.id, p]));
 
 const renderCardList = () => {
   if (!els.cardList) return;
@@ -1916,6 +1874,20 @@ const applySettingsToInputs = () => {
   els.settingsLanguage.value = state.settings.language || 'en';
   els.settingsAnkiUrl.value = state.settings.anki_url || 'http://127.0.0.1:8765';
   els.settingsAutoSync.checked = Boolean(state.settings.auto_sync);
+  
+  const apcgDefaultMode = document.getElementById('apcg-default-mode');
+  const apcgIncludeAnki = document.getElementById('apcg-include-anki');
+  const apcgAutoRefresh = document.getElementById('apcg-auto-refresh');
+  
+  if (apcgDefaultMode) {
+    apcgDefaultMode.value = state.settings.apcg?.default_mode || 'auto';
+  }
+  if (apcgIncludeAnki) {
+    apcgIncludeAnki.checked = state.settings.apcg?.include_anki_cards ?? true;
+  }
+  if (apcgAutoRefresh) {
+    apcgAutoRefresh.checked = state.settings.apcg?.auto_refresh ?? false;
+  }
 };
 
 const renderUpdateStatus = (info) => {
@@ -1973,12 +1945,26 @@ const loadSettings = async () => {
   emitNankiEvent('nanki:settings-changed', { source: 'load' });
 };
 
+const loadAppState = async () => {
+  try {
+    // App state can be loaded here for future features
+    await fetchJson('/api/state');
+  } catch (error) {
+    console.warn('[Nanki] Failed to load app state:', error);
+  }
+};
+
 const collectSettingsPayload = () => ({
   ...state.settings,
   workspace_path: els.workspacePath.value.trim() || state.settings.workspace_path,
   anki_url: els.settingsAnkiUrl.value.trim() || 'http://127.0.0.1:8765',
   auto_sync: els.settingsAutoSync.checked,
   language: els.settingsLanguage.value,
+  apcg: {
+    default_mode: document.getElementById('apcg-default-mode')?.value || 'auto',
+    include_anki_cards: document.getElementById('apcg-include-anki')?.checked ?? true,
+    auto_refresh: document.getElementById('apcg-auto-refresh')?.checked ?? false,
+  },
 });
 
 const saveSettings = async ({ quiet = false, reloadNotes = true } = {}) => {
@@ -2138,19 +2124,28 @@ const showTourOverlay = (step) => {
   tourOverlay.style.zIndex = '10000';
 };
 
-const finishTour = () => {
+const finishTour = async () => {
   if (tourOverlay) {
     tourOverlay.remove();
     tourOverlay = null;
   }
   state.hasSeenTour = true;
+  
+  // Save tour state to persistent app state
+  try {
+    await fetchJson('/api/state', { method: 'PUT', body: JSON.stringify({ has_seen_onboarding: true }) });
+    console.log('[Nanki] Tour state saved to app state');
+  } catch (error) {
+    console.warn('[Nanki] Could not save tour state to API:', error);
+  }
+  
   // Use sessionStorage as fallback since localStorage might not persist in webview
   try {
     localStorage.setItem('nanki_has_seen_tour', 'true');
     sessionStorage.setItem('nanki_has_seen_tour_session', 'true');
     console.log('[Nanki] Tour marked as seen in localStorage and sessionStorage');
   } catch (e) {
-    console.warn('[Nanki] Could not save tour state:', e);
+    console.warn('[Nanki] Could not save tour state to storage:', e);
     // Fallback to in-memory state
     state.hasSeenTour = true;
   }
@@ -2267,21 +2262,26 @@ const refreshAnkiDecks = async ({ quiet = false } = {}) => {
 };
 
 const loadCoverage = async ({ quiet = false, force = false } = {}) => {
-  if (!state.activeNoteId) return;
+  if (!state.activeNoteId) {
+    if (!quiet) showToast('No note selected', 'error');
+    return;
+  }
   if (!force && !state.coverageStale && state.coverageReport) return;
   state.coverageLoading = true;
   if (!quiet && els.refreshCoverageBtn) els.refreshCoverageBtn.classList.add('loading');
-  if (!quiet) showLoading('Analyzing coverage...');
+  if (!quiet) showLoading('Analyzing...');
   try {
-    const report = await fetchJson(`/api/notes/${state.activeNoteId}/coverage`);
+    const mode = state.settings?.apcg?.default_mode || 'auto';
+    const includeAnki = state.settings?.apcg?.include_anki_cards ?? true;
+    const report = await fetchJson(`/api/notes/${state.activeNoteId}/coverage?mode=${mode}&include_anki_cards=${includeAnki}`);
     state.coverageReport = report;
     state.coverageStale = false;
     renderCoveragePanel();
     renderEditorCoverageView();
     if (els.refreshCoverageBtn) els.refreshCoverageBtn.classList.remove('stale');
-    if (!quiet) showToast('Coverage analysis complete', 'success', 2000);
+    if (!quiet) showToast('Analysis complete', 'success', 2000);
   } catch (error) {
-    if (!quiet) showToast(`Coverage error: ${error.message}`, 'error');
+    if (!quiet) showToast(`Analysis error: ${error.message}`, 'error');
   } finally {
     state.coverageLoading = false;
     if (!quiet && els.refreshCoverageBtn) els.refreshCoverageBtn.classList.remove('loading');
@@ -3093,7 +3093,6 @@ const bindEvents = () => {
         }
         showToast('AI prompts reset to default', 'success');
         
-        // Clear status after 5 seconds
         setTimeout(() => {
           if (statusEl) statusEl.textContent = '';
         }, 5000);
@@ -3104,6 +3103,35 @@ const bindEvents = () => {
           statusEl.style.color = 'var(--danger)';
         }
         showToast(`Failed to reset prompts: ${error.message}`, 'error');
+      }
+    });
+  }
+  
+  // Reset APCG settings button
+  const resetApcgBtn = document.getElementById('reset-apcg-btn');
+  if (resetApcgBtn) {
+    resetApcgBtn.addEventListener('click', async () => {
+      try {
+        const response = await fetch('/api/settings/apcg/reset', { method: 'POST' });
+        if (!response.ok) throw new Error('Failed to reset APCG settings');
+        
+        const statusEl = document.getElementById('reset-apcg-status');
+        if (statusEl) {
+          statusEl.textContent = '✅ APCG settings reset!';
+          statusEl.style.color = 'var(--success)';
+        }
+        showToast('APCG settings reset', 'success');
+        
+        setTimeout(() => {
+          if (statusEl) statusEl.textContent = '';
+        }, 5000);
+      } catch (error) {
+        const statusEl = document.getElementById('reset-apcg-status');
+        if (statusEl) {
+          statusEl.textContent = `❌ Error: ${error.message}`;
+          statusEl.style.color = 'var(--danger)';
+        }
+        showToast(`Failed to reset APCG settings: ${error.message}`, 'error');
       }
     });
   }
@@ -3193,10 +3221,8 @@ const mapElements = () => {
     coverageSummaryText: document.getElementById('coverage-summary-text'),
     coverageBarFill: document.getElementById('coverage-bar-fill'),
     coverageStatPills: document.getElementById('coverage-stat-pills'),
-    coverageSections: document.getElementById('coverage-sections'),
     coverageGaps: document.getElementById('coverage-gaps'),
-    coverageUnmapped: document.getElementById('coverage-unmapped'),
-    coverageAnkiMatches: document.getElementById('coverage-anki-matches'),
+    coverageConflicts: document.getElementById('coverage-conflicts'),
     refreshCoverageBtn: document.getElementById('refresh-coverage-btn'),
     suggestCardsForGapsBtn: document.getElementById('suggest-cards-for-gaps-btn'),
     sourceSummary: document.getElementById('source-summary'),
@@ -3333,28 +3359,13 @@ window.Nanki = {
   cycleTheme,
 };
 
-window.addEventListener('DOMContentLoaded', () => {
-  init().catch((error) => {
+window.addEventListener('DOMContentLoaded', async () => {
+  await init().catch((error) => {
     console.error('[Nanki] Init error:', error);
     showToast(error.message, 'error');
   });
   
-  // Check if first run and show tour
-  const hasSeenTourLS = localStorage.getItem('nanki_has_seen_tour') === 'true';
-  const hasSeenTourSession = sessionStorage.getItem('nanki_has_seen_tour_session') === 'true';
-  const hasSeenTour = hasSeenTourLS || hasSeenTourSession;
-  
-  console.log('[Nanki] Tour seen (localStorage):', hasSeenTourLS);
-  console.log('[Nanki] Tour seen (sessionStorage):', hasSeenTourSession);
-  
-  if (!hasSeenTour) {
-    console.log('[Nanki] Starting first-run tour');
-    setTimeout(() => {
-      startTour();
-    }, 1500);
-  } else {
-    console.log('[Nanki] Skipping tour - user has seen it before');
-  }
+
 });
 
 // Warn before leaving with unsaved changes

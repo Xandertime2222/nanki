@@ -51,19 +51,9 @@
     console.log('[APCG] Coverage analyzer initialized');
   }
 
-  /**
-   * Handle note loaded event
-   */
   function handleNoteLoaded(event) {
     currentNoteId = event.detail?.noteId || window.currentNoteId;
-    
-    // Reset UI
     resetUI();
-    
-    // Auto-run analysis with current mode
-    if (currentNoteId) {
-      runAnalysis(currentMode);
-    }
   }
 
   /**
@@ -88,27 +78,10 @@
     document.getElementById('apcg-detected-mode').style.display = 'none';
   }
 
-  /**
-   * Handle mode button click
-   */
-  function handleModeChange(event) {
-    const btn = event.currentTarget;
-    const mode = btn.dataset.mode;
-    
-    // Update active state
-    document.querySelectorAll('.apcg-mode-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    
-    // Update mode hint
-    updateModeHint(mode);
-    
-    // Store mode
-    currentMode = mode;
-    
-    // Re-run analysis
-    if (currentNoteId) {
-      runAnalysis(mode);
-    }
+  function handleNoteLoaded(event) {
+    currentNoteId = event.detail?.noteId || window.currentNoteId;
+    resetUI();
+  }
   }
 
   /**
@@ -129,20 +102,17 @@
     }
   }
 
-  /**
-   * Run APCG coverage analysis
-   */
   async function runAnalysis(mode = 'auto') {
     if (!currentNoteId) {
-      showToast('No note selected', 'error');
+      showToast('Select a note first to analyze coverage', 'error');
       return;
     }
 
-    // Show loading state
     showLoading(true);
     
     try {
-      const url = `/api/notes/${currentNoteId}/coverage/apcg?mode=${mode}&include_anki_cards=true`;
+      const includeAnki = document.getElementById('apcg-include-anki')?.checked ?? true;
+      const url = `/api/notes/${currentNoteId}/coverage/apcg?mode=${mode}&include_anki_cards=${includeAnki}`;
       const response = await fetch(url, { method: 'POST' });
       
       if (!response.ok) {
@@ -152,10 +122,7 @@
       const result = await response.json();
       lastAnalysisResult = result;
       
-      // Display results
       displayResults(result);
-      
-      // Update detected mode badge
       updateDetectedModeBadge(result.detected_mode);
       
       showToast('Coverage analysis complete', 'success');
@@ -172,16 +139,9 @@
    * Display analysis results
    */
   function displayResults(result) {
-    // Hide empty state
     document.getElementById('apcg-empty-state').style.display = 'none';
-    
-    // Show summary cards
     showSummaryCards(result);
-    
-    // Show coverage bar
     showCoverageBar(result);
-    
-    // Show propositions
     showPropositions(result);
   }
 
@@ -206,15 +166,12 @@
     const corePercent = Math.round(result.total_core_coverage * 100);
     const exactPercent = Math.round(result.total_exact_coverage * 100);
     
-    // Update bar
     const barFill = document.getElementById('apcg-coverage-bar-fill');
     barFill.style.width = `${corePercent}%`;
     
-    // Update percentages
     document.getElementById('apcg-coverage-percent').textContent = `${corePercent}%`;
     document.getElementById('apcg-exact-coverage-percent').textContent = `${exactPercent}%`;
     
-    // Update level badge
     const levelEl = document.getElementById('apcg-coverage-level');
     const level = result.total_core_coverage > 0.6 ? 'high' : result.total_core_coverage > 0.3 ? 'medium' : 'low';
     levelEl.textContent = level.charAt(0).toUpperCase() + level.slice(1);
@@ -247,13 +204,39 @@
     integrateWithExistingGaps(uncovered);
   }
 
-  /**
-   * Render proposition list
-   */
-  function renderPropositionList(propositions) {
-    if (!propositions || propositions.length === 0) {
-      return '<p class="text-muted" style="padding: 20px; text-align: center;">No propositions in this category</p>';
+  async function runAnalysis(mode = 'auto') {
+    if (!currentNoteId) {
+      showToast('No note selected', 'error');
+      return;
     }
+
+    showLoading(true);
+    
+    try {
+      const includeAnkiEl = document.getElementById('apcg-include-anki');
+      const includeAnki = includeAnkiEl ? includeAnkiEl.checked : true;
+      const url = `/api/notes/${currentNoteId}/coverage/apcg?mode=${mode}&include_anki_cards=${includeAnki}`;
+      const response = await fetch(url, { method: 'POST' });
+      
+      if (!response.ok) {
+        throw new Error(`Analysis failed: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      lastAnalysisResult = result;
+      
+      displayResults(result);
+      integrateWithExistingCoverage(result);
+      
+      showToast('Analysis complete', 'success');
+    } catch (error) {
+      console.error('[APCG] Analysis error:', error);
+      showToast(`Analysis failed: ${error.message}`, 'error');
+      showEmptyState('Analysis failed. Please try again.');
+    } finally {
+      showLoading(false);
+    }
+  }
     
     return `
       <div class="apcg-proposition-list" style="display: flex; flex-direction: column; gap: 8px;">
@@ -375,17 +358,11 @@
     const btn = event.currentTarget;
     const tabName = btn.dataset.tab;
     
-    // Update active tab button
     document.querySelectorAll('.apcg-tab-btn').forEach(b => {
       b.classList.remove('active');
-      b.style.borderBottomColor = 'transparent';
-      b.style.color = 'var(--muted)';
     });
     btn.classList.add('active');
-    btn.style.borderBottomColor = 'var(--accent)';
-    btn.style.color = 'var(--accent)';
     
-    // Show/hide tab content
     document.querySelectorAll('.apcg-tab-content').forEach(content => {
       content.style.display = 'none';
     });
@@ -417,31 +394,28 @@
     `;
   }
 
-  /**
-   * Integrate uncovered propositions with existing gaps section
-   */
-  function integrateWithExistingGaps(uncovered) {
-    const gapsContainer = document.getElementById('coverage-gaps');
-    if (!gapsContainer || !uncovered || uncovered.length === 0) return;
+  function integrateWithExistingCoverage(result) {
+    const coveragePercent = document.getElementById('coverage-percent');
+    const coverageBarFill = document.getElementById('coverage-bar-fill');
+    const coverageStatPills = document.getElementById('coverage-stat-pills');
+    const coverageSummaryText = document.getElementById('coverage-summary-text');
     
-    // Add APCG gaps to existing gaps section
-    const apcgGaps = uncovered.slice(0, 5).map(u => `
-      <div class="coverage-list-item" style="background: var(--danger-soft); border-left: 3px solid var(--danger);">
-        <div class="coverage-list-item-header">
-          <strong style="font-size: 12px;">${escapeHtml(u.text.substring(0, 60))}${u.text.length > 60 ? '...' : ''}</strong>
-          <span class="apcg-prop-type" style="font-size: 10px;">${u.type}</span>
-        </div>
-        <button class="ghost" style="font-size: 11px; margin-top: 4px;" onclick="suggestCardForProposition('${u.id}', '${escapeHtml(u.text).replace(/'/g, "\\'")}')">
-          Suggest card
-        </button>
-      </div>
-    `).join('');
+    const corePercent = Math.round(result.total_core_coverage * 100);
+    const covered = result.total_propositions - result.uncovered_count;
     
-    // Append to existing gaps
-    if (gapsContainer.innerHTML.trim() === '' || gapsContainer.innerHTML.includes('No gaps')) {
-      gapsContainer.innerHTML = apcgGaps;
-    } else {
-      gapsContainer.innerHTML += apcgGaps;
+    if (coveragePercent) coveragePercent.textContent = `${corePercent}%`;
+    if (coverageBarFill) coverageBarFill.style.width = `${corePercent}%`;
+    
+    if (coverageStatPills) {
+      coverageStatPills.innerHTML = [
+        `<span class="pill">✓ ${covered} covered</span>`,
+        `<span class="pill danger">✗ ${result.uncovered_count} gaps</span>`,
+        result.conflicts?.length ? `<span class="pill warning">⚠ ${result.conflicts.length} conflicts</span>` : ''
+      ].filter(Boolean).join('');
+    }
+    
+    if (coverageSummaryText) {
+      coverageSummaryText.textContent = `${result.total_propositions} propositions`;
     }
   }
 

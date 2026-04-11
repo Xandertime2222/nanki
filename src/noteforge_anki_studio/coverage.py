@@ -1482,6 +1482,7 @@ def build_note_coverage(
     external_cards: list[AnkiLibraryCard] | None = None,
     *,
     anki_status: dict[str, Any] | None = None,
+    mode: str = "auto",
 ) -> dict:
     content = note.content or ""
     sections = parse_sections(content)

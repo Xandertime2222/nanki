@@ -38,7 +38,6 @@ class AISettings(BaseModel):
     default_model: str = ""
     chat_model: str = ""
     explain_model: str = ""
-    flashcard_model: str = ""
     auto_flashcard_model: str = ""
     language: AppLanguage = "en"
     use_anki_coverage_context: bool = True
@@ -46,6 +45,12 @@ class AISettings(BaseModel):
     explain_note_only: bool = False
     auto_detect_ollama_models: bool = True
     prompts: AIPromptSettings = Field(default_factory=AIPromptSettings)
+
+
+class APCGSettings(BaseModel):
+    default_mode: str = "auto"
+    include_anki_cards: bool = True
+    auto_refresh: bool = False
 
 
 class AppSettings(BaseModel):
@@ -57,6 +62,7 @@ class AppSettings(BaseModel):
     port: int = 7788
     language: AppLanguage = "en"
     ai: AISettings = Field(default_factory=AISettings)
+    apcg: APCGSettings = Field(default_factory=APCGSettings)
 
 
 class NoteMetadata(BaseModel):
@@ -102,6 +108,7 @@ class CoverageAnchor(BaseModel):
 
 class AppState(BaseModel):
     """App state for onboarding, update checks, etc."""
+
     has_seen_onboarding: bool = False
     last_update_check: str | None = None
     dismissed_version: str | None = None
