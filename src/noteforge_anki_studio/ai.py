@@ -9,7 +9,7 @@ import httpx
 
 from .anki_connect import AnkiConnectClient, AnkiLibraryCard
 from .config import SettingsManager
-from .coverage import (
+from .coverage_utils import (
     COMMON_TERMS,
     best_excerpt_for_candidates,
     card_search_candidates,
