@@ -2597,3 +2597,70 @@ a:hover {
   text-decoration-style: dotted;
   text-underline-offset: 3px;
 }
+
+/* Coverage Tooltip */
+.coverage-tooltip {
+  position: fixed;
+  z-index: 9999;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 0.75rem;
+  max-width: 320px;
+  pointer-events: none;
+}
+
+.coverage-tooltip-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.coverage-tooltip-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-success);
+  background: rgba(34, 197, 94, 0.1);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.coverage-tooltip-score {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.coverage-tooltip-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.coverage-tooltip-card {
+  background: var(--bg-soft);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem;
+}
+
+.coverage-tooltip-card-front {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--fg);
+  margin-bottom: 0.25rem;
+}
+
+.coverage-tooltip-card-back {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.coverage-tooltip-more {
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-align: center;
+  padding-top: 0.25rem;
+}

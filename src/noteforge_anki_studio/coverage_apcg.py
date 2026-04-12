@@ -1139,25 +1139,29 @@ def calculate_proposition_coverage(
         if evidence.extra_text and proposition.text:
             excerpt_lower = evidence.extra_text.lower().strip()
             prop_lower = proposition.text.lower().strip()
-            # Direct match
+            # Direct match - highest priority
             if excerpt_lower == prop_lower:
                 best_text_overlap = 1.0
-                if evidence not in result.matched_evidence:
-                    result.matched_evidence.append(evidence)
+                result.matched_evidence = [evidence]  # Replace with best match only
                 result.match_method = "excerpt_exact"
-                # Boost all slot coverage for exact match
+                # Set perfect scores
                 for slot_name in slot_coverage:
                     slot_coverage[slot_name] = 1.0
-            # Partial match (excerpt is contained in proposition)
+                # Early exit for exact match
+                continue
+            # High similarity partial match (>80%)
             elif excerpt_lower in prop_lower or prop_lower in excerpt_lower:
                 overlap_ratio = min(len(excerpt_lower), len(prop_lower)) / max(len(excerpt_lower), len(prop_lower))
-                if overlap_ratio > 0.5:
+                if overlap_ratio > 0.8:
                     best_text_overlap = max(best_text_overlap, overlap_ratio)
-                    if not result.match_method.startswith("excerpt"):
-                        result.match_method = "excerpt_partial"
-                    # Boost slot coverage for partial match
+                    # Only set as primary match if this is the best match so far
+                    if overlap_ratio > 0.9:
+                        result.match_method = "excerpt_high"
+                        if evidence not in result.matched_evidence:
+                            result.matched_evidence.append(evidence)
+                    # Boost slot coverage for high similarity
                     for slot_name in slot_coverage:
-                        slot_coverage[slot_name] = max(slot_coverage[slot_name], overlap_ratio)
+                        slot_coverage[slot_name] = max(slot_coverage[slot_name], overlap_ratio * 0.95)
         
         # Front/back coherence
         fb_coherence = front_back_coherence_score(evidence, proposition)
