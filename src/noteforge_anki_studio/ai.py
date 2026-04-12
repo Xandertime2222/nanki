@@ -137,7 +137,7 @@ class AIService:
         task_lookup = {
             "chat": ai.chat_model,
             "explain": ai.explain_model,
-            "flashcards": ai.flashcard_model,
+            "flashcards": ai.auto_flashcard_model,  # Use auto_flashcard_model for flashcards
             "auto_flashcards": ai.auto_flashcard_model,
         }
         for candidate in (task_lookup.get(task, ""), ai.default_model):
@@ -777,7 +777,18 @@ Return a JSON object with this structure:
 Analyze carefully and be thorough. Identify ALL important facts."""
         
         # Call AI
-        model = self.resolve_model(settings, "flashcards", None)
+        try:
+            model = self.resolve_model(settings, "chat", None)
+        except AIConfigurationError:
+            # No model configured, return empty result
+            return {
+                "total_propositions": 0,
+                "propositions": [],
+                "coverage_percentage": 0.0,
+                "ai_analysis": False,
+                "error": "No AI model configured. Please configure AI in settings.",
+            }
+        
         content_response, _, _ = await self._chat_completion(
             settings,
             task="flashcards",

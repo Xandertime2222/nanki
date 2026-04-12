@@ -216,8 +216,9 @@ async def get_ai_coverage(note_id: str, mode: str = "auto") -> dict:
     
     settings = settings_manager.load()
     
-    # Use AI to analyze coverage
-    ai_service = AIService(settings_manager)
+    # Create AI service with anki_client
+    anki_client = AnkiConnectClient(settings.anki_url)
+    ai_service = AIService(settings_manager, anki_client)
     
     try:
         result = await ai_service.analyze_coverage_with_ai(
@@ -226,6 +227,11 @@ async def get_ai_coverage(note_id: str, mode: str = "auto") -> dict:
             mode=mode
         )
         return result
+    except AIConfigurationError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"AI not configured: {str(exc)}"
+        ) from exc
     except Exception as exc:
         raise HTTPException(
             status_code=500,
