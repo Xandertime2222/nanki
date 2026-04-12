@@ -1418,9 +1418,9 @@ const renderCoveragePanel = () => {
   
   if (els.coverageStatPills) {
     els.coverageStatPills.innerHTML = [
-      `<span class="pill">✓ ${covered} covered</span>`,
-      `<span class="pill danger">✗ ${report.uncovered_count || 0} gaps</span>`,
-      report.conflicts?.length ? `<span class="pill warning">⚠ ${report.conflicts.length} conflicts</span>` : '',
+      `<span class="pill">${covered} covered</span>`,
+      `<span class="pill danger">${report.uncovered_count || 0} gaps</span>`,
+      report.conflicts?.length ? `<span class="pill warning">${report.conflicts.length} conflicts</span>` : '',
     ].filter(Boolean).join('');
   }
 
@@ -2576,7 +2576,6 @@ const saveDrawerCard = async ({ pushAfterSave = false } = {}) => {
 };
 
 const deleteCard = async (cardId) => {
-  if (!window.confirm(t('dialogs.deleteCardConfirm'))) return;
   if (!state.activeNoteId) return;
   try {
     await fetchJson(`/api/notes/${state.activeNoteId}/cards/${cardId}`, { method: 'DELETE' });
@@ -3088,18 +3087,18 @@ const bindEvents = () => {
         
         const statusEl = document.getElementById('reset-prompts-status');
         if (statusEl) {
-          statusEl.textContent = '✅ Prompts successfully reset to default!';
+          statusEl.textContent = 'Prompts successfully reset to default.';
           statusEl.style.color = 'var(--success)';
         }
         showToast('AI prompts reset to default', 'success');
-        
+
         setTimeout(() => {
           if (statusEl) statusEl.textContent = '';
         }, 5000);
       } catch (error) {
         const statusEl = document.getElementById('reset-prompts-status');
         if (statusEl) {
-          statusEl.textContent = `❌ Error: ${error.message}`;
+          statusEl.textContent = `Error: ${error.message}`;
           statusEl.style.color = 'var(--danger)';
         }
         showToast(`Failed to reset prompts: ${error.message}`, 'error');
@@ -3117,18 +3116,18 @@ const bindEvents = () => {
         
         const statusEl = document.getElementById('reset-apcg-status');
         if (statusEl) {
-          statusEl.textContent = '✅ APCG settings reset!';
+          statusEl.textContent = 'APCG settings reset.';
           statusEl.style.color = 'var(--success)';
         }
         showToast('APCG settings reset', 'success');
-        
+
         setTimeout(() => {
           if (statusEl) statusEl.textContent = '';
         }, 5000);
       } catch (error) {
         const statusEl = document.getElementById('reset-apcg-status');
         if (statusEl) {
-          statusEl.textContent = `❌ Error: ${error.message}`;
+          statusEl.textContent = `Error: ${error.message}`;
           statusEl.style.color = 'var(--danger)';
         }
         showToast(`Failed to reset APCG settings: ${error.message}`, 'error');
