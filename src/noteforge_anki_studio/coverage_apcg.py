@@ -1169,14 +1169,19 @@ def calculate_proposition_coverage(
             best_fb_coherence = fb_coherence
             result.front_back_match = True
         
-        # Track matched evidence
+        # Track matched evidence (only high-quality matches)
         if any(slot_coverage[z] > 0.2 for z in proposition.slots.keys()) or text_overlap > 0.3:
             # Only add if not already matched via excerpt
             if evidence not in result.matched_evidence:
-                result.matched_evidence.append(evidence)
-            # Don't override excerpt match method
-            if not result.match_method.startswith("excerpt"):
-                result.match_method = "slot" if any(slot_coverage[z] > 0.2 for z in proposition.slots.keys()) else "text"
+                # For non-excerpt matches, require higher threshold
+                if not result.match_method.startswith("excerpt"):
+                    # Only add if this is a strong match
+                    if text_overlap > 0.6 or any(slot_coverage[z] > 0.5 for z in proposition.slots.keys()):
+                        result.matched_evidence.append(evidence)
+                        result.match_method = "slot" if any(slot_coverage[z] > 0.2 for z in proposition.slots.keys()) else "text"
+                else:
+                    # Excerpt matches are always high quality
+                    result.matched_evidence.append(evidence)
         
         # Soft conflict
         max_conflict = max(max_conflict, soft_conflict_score(evidence, proposition))
