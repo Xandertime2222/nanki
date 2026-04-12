@@ -1973,6 +1973,7 @@ const applySettingsToInputs = () => {
   const apcgDefaultMode = document.getElementById('apcg-default-mode');
   const apcgIncludeAnki = document.getElementById('apcg-include-anki');
   const apcgAutoRefresh = document.getElementById('apcg-auto-refresh');
+  const apcgUseAI = document.getElementById('apcg-use-ai');
   
   if (apcgDefaultMode) {
     apcgDefaultMode.value = state.settings.apcg?.default_mode || 'auto';
@@ -1982,6 +1983,9 @@ const applySettingsToInputs = () => {
   }
   if (apcgAutoRefresh) {
     apcgAutoRefresh.checked = state.settings.apcg?.auto_refresh ?? false;
+  }
+  if (apcgUseAI) {
+    apcgUseAI.checked = state.settings.apcg?.use_ai_coverage ?? false;
   }
 };
 
@@ -2058,6 +2062,8 @@ const collectSettingsPayload = () => ({
   apcg: {
     default_mode: document.getElementById('apcg-default-mode')?.value || 'auto',
     include_anki_cards: document.getElementById('apcg-include-anki')?.checked ?? true,
+    auto_refresh: document.getElementById('apcg-auto-refresh')?.checked ?? false,
+    use_ai_coverage: document.getElementById('apcg-use-ai')?.checked ?? false,
     auto_refresh: document.getElementById('apcg-auto-refresh')?.checked ?? false,
   },
 });
@@ -2368,7 +2374,14 @@ const loadCoverage = async ({ quiet = false, force = false } = {}) => {
   try {
     const mode = state.settings?.apcg?.default_mode || 'auto';
     const includeAnki = state.settings?.apcg?.include_anki_cards ?? true;
-    const report = await fetchJson(`/api/notes/${state.activeNoteId}/coverage?mode=${mode}&include_anki_cards=${includeAnki}`);
+    const useAI = state.settings?.apcg?.use_ai_coverage ?? false;
+    
+    // Use AI coverage if enabled
+    const endpoint = useAI 
+      ? `/api/notes/${state.activeNoteId}/coverage/ai?mode=${mode}`
+      : `/api/notes/${state.activeNoteId}/coverage?mode=${mode}&include_anki_cards=${includeAnki}`;
+    
+    const report = await fetchJson(endpoint);
     state.coverageReport = report;
     state.coverageStale = false;
     renderCoveragePanel();

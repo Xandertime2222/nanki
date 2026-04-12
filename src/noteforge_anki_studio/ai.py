@@ -713,3 +713,92 @@ class AIService:
             ],
             "note_only": True,
         }
+
+    async def analyze_coverage_with_ai(
+        self,
+        settings: AppSettings,
+        *,
+        note: NoteDocument,
+        mode: str = "auto",
+    ) -> dict[str, Any]:
+        """Use AI to analyze coverage of a note.
+        
+        Returns propositions, coverage scores, and suggestions.
+        """
+        content = note.content or ""
+        if not content.strip():
+            return {
+                "total_propositions": 0,
+                "propositions": [],
+                "coverage_percentage": 0.0,
+                "ai_analysis": True,
+            }
+        
+        # Build context with existing cards
+        cards_context = []
+        for card in note.cards:
+            cards_context.append({
+                "front": card.front,
+                "back": card.back,
+                "source_excerpt": card.source_excerpt,
+            })
+        
+        # Prepare prompt for AI coverage analysis
+        prompt = f"""Analyze the following note content and identify all important facts/propositions that should be covered by flashcards.
+
+For each proposition:
+1. Extract the key fact or concept
+2. Check if it's already covered by existing cards
+3. Rate how well it's covered (0.0-1.0)
+4. If not covered, suggest a flashcard
+
+Note Content:
+{content[:2000]}
+
+Existing Cards:
+{json.dumps(cards_context[:10], indent=2)}
+
+Return a JSON object with this structure:
+{{
+  "propositions": [
+    {{
+      "text": "the fact/proposition text",
+      "type": "fact|process|definition|concept",
+      "covered": true|false,
+      "coverage_score": 0.0-1.0,
+      "matched_cards": ["card_front_1", "card_front_2"],
+      "suggestion": {{"front": "...", "back": "..."}} // only if not covered
+    }}
+  ],
+  "coverage_percentage": 0.0-100.0,
+  "summary": "Brief summary of coverage status"
+}}
+
+Analyze carefully and be thorough. Identify ALL important facts."""
+        
+        # Call AI
+        model = self.resolve_model(settings, "flashcards", None)
+        content_response, _, _ = await self._chat_completion(
+            settings,
+            task="flashcards",
+            messages=[{"role": "user", "content": prompt}],
+            model=model,
+            temperature=0.0,
+        )
+        
+        # Parse response
+        try:
+            result = json.loads(content_response)
+            result["ai_analysis"] = True
+            result["model_used"] = model
+            return result
+        except json.JSONDecodeError:
+            # Try to extract JSON
+            import re
+            match = re.search(r'\{[\s\S]*\}', content_response)
+            if match:
+                result = json.loads(match.group())
+                result["ai_analysis"] = True
+                result["model_used"] = model
+                return result
+            raise AIServiceError("Failed to parse AI coverage analysis response")

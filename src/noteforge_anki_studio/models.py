@@ -51,6 +51,7 @@ class APCGSettings(BaseModel):
     default_mode: str = "auto"
     include_anki_cards: bool = True
     auto_refresh: bool = False
+    use_ai_coverage: bool = False  # Use AI for coverage analysis
 
 
 class AppSettings(BaseModel):

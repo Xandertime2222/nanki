@@ -36,6 +36,7 @@ from .models import (
     DuplicateNoteRequest,
     HtmlToMarkdownRequest,
     ImportTextRequest,
+    NoteDocument,
     RenderMarkdownRequest,
     SaveCardRequest,
     SaveNoteRequest,
@@ -201,6 +202,35 @@ async def reset_apcg_settings() -> dict:
         raise HTTPException(
             status_code=500, detail=f"Failed to reset APCG settings: {str(exc)}"
         )
+
+
+@app.get("/api/notes/{note_id}/coverage/ai")
+async def get_ai_coverage(note_id: str, mode: str = "auto") -> dict:
+    """Analyze note coverage using AI."""
+    from .ai import AIService
+    
+    try:
+        note = store.load_note(note_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    
+    settings = settings_manager.load()
+    
+    # Use AI to analyze coverage
+    ai_service = AIService(settings_manager)
+    
+    try:
+        result = await ai_service.analyze_coverage_with_ai(
+            settings,
+            note=note,
+            mode=mode
+        )
+        return result
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"AI coverage analysis failed: {str(exc)}"
+        ) from exc
 
 
 @app.get("/api/notes")
