@@ -802,6 +802,11 @@ const renderEditorCoverageView = () => {
     const uncovered = report.propositions.filter(p => !p.matched);
     const corePercent = Math.round((report.total_core_coverage || 0) * 100);
     
+    // Use coverage_html if available
+    const coverageHtmlContent = report.coverage_html 
+      ? `<div class="editor-coverage-html">${report.coverage_html}</div>`
+      : '';
+    
     els.editorCoverageView.innerHTML = `
       <div class="editor-coverage-summary">
         <div class="editor-coverage-stat">
@@ -818,6 +823,7 @@ const renderEditorCoverageView = () => {
         </div>
         <div class="editor-coverage-percent">${corePercent}%</div>
       </div>
+      ${coverageHtmlContent}
     `;
   } else {
     els.editorCoverageView.innerHTML = `<div class="editor-coverage-empty"><span class="section-label">${escapeHtml(t('coverage.title'))}</span><div class="coverage-muted-empty">Click "Analyze" to analyze coverage</div></div>`;
