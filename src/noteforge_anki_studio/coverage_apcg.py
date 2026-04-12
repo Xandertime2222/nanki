@@ -229,24 +229,35 @@ def discourse_segment(text: str) -> list[tuple[int, int, str]]:
     if not text.strip():
         return []
     
+    # Remove markdown headings from content for analysis
+    clean_text = re.sub(r'^#{1,6}\s+.*$', '', text, flags=re.MULTILINE)
+    clean_text = re.sub(r'\n{3,}', '\n\n', clean_text)
+    
     segments: list[tuple[int, int, str]] = []
     boundaries: list[int] = []
     
     # Find sentence boundaries
-    for m in SENTENCE_BOUNDARY.finditer(text):
+    for m in SENTENCE_BOUNDARY.finditer(clean_text):
         punct_pos = m.start()
-        if m.group(1) == "." and _is_abbreviation(text, punct_pos):
+        if m.group(1) == "." and _is_abbreviation(clean_text, punct_pos):
             continue
         boundaries.append(punct_pos + 1)
     
     # Build segments
     starts = [0] + boundaries
-    ends = boundaries + [len(text)]
+    ends = boundaries + [len(clean_text)]
     
     for s, e in zip(starts, ends, strict=False):
-        chunk = text[s:e].strip()
+        chunk = clean_text[s:e].strip()
+        # Skip empty chunks and very short ones (less than 4 chars)
         if chunk and len(chunk) >= 4:
-            segments.append((s, e, chunk))
+            # Find actual position in original text
+            orig_start = text.find(chunk, max(0, s - 50))
+            if orig_start >= 0:
+                orig_end = orig_start + len(chunk)
+                segments.append((orig_start, orig_end, chunk))
+            else:
+                segments.append((s, e, chunk))
     
     return segments
 
@@ -579,6 +590,7 @@ def parse_question_answer_into_evidence(
     front: str,
     back: str,
     extra: str = "",
+    source_excerpt: str = "",
     mode: CoverageMode = CoverageMode.UNIVERSAL,
 ) -> list[Evidence]:
     """Extract evidence from flashcard Q&A with front/back awareness."""
@@ -687,6 +699,29 @@ def parse_question_answer_into_evidence(
                 source="extra",
                 card_type=card_type,
             ))
+    
+    # Priority 5: Source excerpt matching (HIGHEST PRIORITY for accurate coverage)
+    if source_excerpt and len(source_excerpt.strip()) >= 5:
+        excerpt_slots = _extract_slots_universal(source_excerpt)
+        # Fallback: Use simple extraction if no slots found
+        if not excerpt_slots:
+            words = source_excerpt.split()
+            if len(words) >= 3:
+                excerpt_slots = {
+                    "subject": " ".join(words[:2]),
+                    "predicate": " ".join(words[2:]),
+                }
+        # Create evidence even if slots are empty (for text matching)
+        evidences.append(Evidence(
+            id=f"evidence_{card_id}_excerpt",
+            card_id=card_id,
+            front_text=front[:100],
+            back_text=back[:100],
+            extra_text=source_excerpt[:200],
+            combined_slots=excerpt_slots,
+            source="excerpt",
+            card_type=card_type,
+        ))
     
     return evidences
 
@@ -1099,6 +1134,31 @@ def calculate_proposition_coverage(
         if text_overlap > best_text_overlap:
             best_text_overlap = text_overlap
         
+        # Source excerpt matching (CRITICAL for accurate coverage)
+        # Check if evidence has source_excerpt and it matches proposition text
+        if evidence.extra_text and proposition.text:
+            excerpt_lower = evidence.extra_text.lower().strip()
+            prop_lower = proposition.text.lower().strip()
+            # Direct match
+            if excerpt_lower == prop_lower:
+                best_text_overlap = 1.0
+                if evidence not in result.matched_evidence:
+                    result.matched_evidence.append(evidence)
+                result.match_method = "excerpt_exact"
+                # Boost all slot coverage for exact match
+                for slot_name in slot_coverage:
+                    slot_coverage[slot_name] = 1.0
+            # Partial match (excerpt is contained in proposition)
+            elif excerpt_lower in prop_lower or prop_lower in excerpt_lower:
+                overlap_ratio = min(len(excerpt_lower), len(prop_lower)) / max(len(excerpt_lower), len(prop_lower))
+                if overlap_ratio > 0.5:
+                    best_text_overlap = max(best_text_overlap, overlap_ratio)
+                    if not result.match_method.startswith("excerpt"):
+                        result.match_method = "excerpt_partial"
+                    # Boost slot coverage for partial match
+                    for slot_name in slot_coverage:
+                        slot_coverage[slot_name] = max(slot_coverage[slot_name], overlap_ratio)
+        
         # Front/back coherence
         fb_coherence = front_back_coherence_score(evidence, proposition)
         if fb_coherence > best_fb_coherence:
@@ -1107,8 +1167,12 @@ def calculate_proposition_coverage(
         
         # Track matched evidence
         if any(slot_coverage[z] > 0.2 for z in proposition.slots.keys()) or text_overlap > 0.3:
-            result.matched_evidence.append(evidence)
-            result.match_method = "slot" if any(slot_coverage[z] > 0.2 for z in proposition.slots.keys()) else "text"
+            # Only add if not already matched via excerpt
+            if evidence not in result.matched_evidence:
+                result.matched_evidence.append(evidence)
+            # Don't override excerpt match method
+            if not result.match_method.startswith("excerpt"):
+                result.match_method = "slot" if any(slot_coverage[z] > 0.2 for z in proposition.slots.keys()) else "text"
         
         # Soft conflict
         max_conflict = max(max_conflict, soft_conflict_score(evidence, proposition))
@@ -1230,8 +1294,11 @@ def apcg_coverage(
         front = card.get("front", "")
         back = card.get("back", "")
         extra = card.get("extra", "")
+        source_excerpt = card.get("source_excerpt", "")
         
-        evidence_list = parse_question_answer_into_evidence(card_id, front, back, extra, mode)
+        evidence_list = parse_question_answer_into_evidence(
+            card_id, front, back, extra, source_excerpt, mode
+        )
         all_evidence.extend(evidence_list)
     
     # Step 4: Build glossary and canonicalize
@@ -1321,3 +1388,56 @@ def coverage_summary(result: CoverageResult) -> str:
             lines.append(f"  {span_id}: core={scores['core']:.1%}, exact={scores['exact']:.1%}")
     
     return "\n".join(lines)
+
+
+def generate_coverage_html(
+    content: str,
+    propositions: list[PropositionCoverage],
+) -> str:
+    """Generate HTML with sentence-level coverage highlighting."""
+    import html as html_module
+    
+    if not propositions:
+        return f'<pre class="coverage-text empty">{html_module.escape(content)}</pre>'
+    
+    # Build coverage map by position
+    coverage_map: dict[tuple[int, int], float] = {}
+    for pc in propositions:
+        start, end = pc.proposition.source_span
+        coverage_map[(start, end)] = pc.core_score
+    
+    parts: list[str] = ['<pre class="coverage-text">']
+    cursor = 0
+    
+    # Sort coverage spans by start position
+    sorted_spans = sorted(coverage_map.keys(), key=lambda x: x[0])
+    
+    for start, end in sorted_spans:
+        # Add gap before this span
+        if cursor < start:
+            parts.append(html_module.escape(content[cursor:start]))
+        
+        # Add covered/uncovered span
+        score = coverage_map[(start, end)]
+        text_span = content[start:end]
+        
+        # Check if this is a heading
+        is_heading = text_span.strip().startswith('#')
+        
+        if is_heading:
+            parts.append(html_module.escape(text_span))
+        elif score >= 0.6:
+            parts.append(f'<span class="coverage-token covered" data-score="{score:.2f}">{html_module.escape(text_span)}</span>')
+        elif score >= 0.3:
+            parts.append(f'<span class="coverage-token partial" data-score="{score:.2f}">{html_module.escape(text_span)}</span>')
+        else:
+            parts.append(f'<span class="coverage-token uncovered" data-score="{score:.2f}">{html_module.escape(text_span)}</span>')
+        
+        cursor = end
+    
+    # Add remaining content
+    if cursor < len(content):
+        parts.append(html_module.escape(content[cursor:]))
+    
+    parts.append('</pre>')
+    return ''.join(parts)

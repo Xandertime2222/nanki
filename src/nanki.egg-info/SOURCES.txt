@@ -14,14 +14,17 @@ src/noteforge_anki_studio/anki_connect.py
 src/noteforge_anki_studio/app.py
 src/noteforge_anki_studio/config.py
 src/noteforge_anki_studio/coverage.py
+src/noteforge_anki_studio/coverage_apcg.py
 src/noteforge_anki_studio/exporters.py
 src/noteforge_anki_studio/importers.py
 src/noteforge_anki_studio/models.py
 src/noteforge_anki_studio/prompts.py
 src/noteforge_anki_studio/storage.py
+src/noteforge_anki_studio/updater.py
 src/noteforge_anki_studio/static/ai.css
 src/noteforge_anki_studio/static/ai_ui.js
 src/noteforge_anki_studio/static/app.js
+src/noteforge_anki_studio/static/coverage.js
 src/noteforge_anki_studio/static/nanki-logo.svg
 src/noteforge_anki_studio/static/styles.css
 src/noteforge_anki_studio/templates/index.html
