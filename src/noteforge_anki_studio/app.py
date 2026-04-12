@@ -151,17 +151,13 @@ async def update_workspace(payload: WorkspaceUpdateRequest) -> AppSettings:
 async def reset_prompts() -> dict:
     """Reset AI prompts to default values with evidence-based best practices."""
     from . import prompts
+    from .models import AIPromptSettings
 
     try:
         settings = settings_manager.load()
 
         # Reset to default prompts (which now include evidence-based best practices)
-        settings.ai.prompts.chat = prompts.DEFAULT_CHAT_SYSTEM_PROMPT
-        settings.ai.prompts.explain = prompts.DEFAULT_EXPLAIN_SYSTEM_PROMPT
-        settings.ai.prompts.flashcards = prompts.DEFAULT_FLASHCARD_SYSTEM_PROMPT
-        settings.ai.prompts.auto_flashcards = (
-            prompts.DEFAULT_AUTO_FLASHCARD_SYSTEM_PROMPT
-        )
+        settings.ai.prompts = AIPromptSettings()
 
         settings_manager.save(settings)
 
