@@ -390,9 +390,13 @@ class AIService:
         return tokens
 
     def _card_signature(self, card: Card | AnkiLibraryCard) -> dict[str, Any]:
-        candidates = card_search_candidates(card)
-        merged = " ".join(candidates)
-        keywords = self._tokenize_keywords(merged)[:12]
+        # Extract text from card for keyword analysis
+        card_text = plain_card_text({
+            "front": getattr(card, "front", "") or "",
+            "back": getattr(card, "back", "") or "",
+            "extra": getattr(card, "extra", "") or "",
+        })
+        keywords = self._tokenize_keywords(card_text)[:12]
         deck_name = str(getattr(card, "deck_name", "") or "")
         origin = str(getattr(card, "origin", "local") or "local")
         card_type = str(getattr(card, "type", "basic") or "basic")

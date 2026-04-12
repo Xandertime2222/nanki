@@ -33,19 +33,29 @@ def plain_card_text(card: dict[str, Any]) -> str:
 
 def best_excerpt_for_candidates(
     text: str,
-    candidates: list[dict[str, Any]],
+    candidates: list[Any],
     min_length: int = 10,
 ) -> str:
-    """Find the best excerpt from text that matches one of the candidates."""
+    """Find the best excerpt from text that matches one of the candidates.
+    
+    Candidates can be strings (direct excerpts) or dicts (with 'source_excerpt' or 'front' keys).
+    """
     if not text or not candidates:
         return ""
     
-    # Simple approach: find the longest matching candidate
     text_lower = text.lower()
     best_match = ""
     
     for candidate in candidates:
-        excerpt = candidate.get("source_excerpt", "") or candidate.get("front", "")
+        # Handle string candidates
+        if isinstance(candidate, str):
+            excerpt = candidate
+        # Handle dict candidates
+        elif isinstance(candidate, dict):
+            excerpt = candidate.get("source_excerpt", "") or candidate.get("front", "")
+        else:
+            continue
+        
         if len(excerpt) >= min_length and excerpt.lower() in text_lower:
             if len(excerpt) > len(best_match):
                 best_match = excerpt
