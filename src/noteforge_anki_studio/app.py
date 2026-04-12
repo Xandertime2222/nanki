@@ -151,17 +151,13 @@ async def update_workspace(payload: WorkspaceUpdateRequest) -> AppSettings:
 async def reset_prompts() -> dict:
     """Reset AI prompts to default values with evidence-based best practices."""
     from . import prompts
+    from .models import AIPromptSettings
 
     try:
         settings = settings_manager.load()
 
         # Reset to default prompts (which now include evidence-based best practices)
-        settings.ai.chat_system_prompt = prompts.DEFAULT_CHAT_SYSTEM_PROMPT
-        settings.ai.explain_system_prompt = prompts.DEFAULT_EXPLAIN_SYSTEM_PROMPT
-        settings.ai.flashcard_system_prompt = prompts.DEFAULT_FLASHCARD_SYSTEM_PROMPT
-        settings.ai.auto_flashcard_system_prompt = (
-            prompts.DEFAULT_AUTO_FLASHCARD_SYSTEM_PROMPT
-        )
+        settings.ai.prompts = AIPromptSettings()
 
         settings_manager.save(settings)
 
@@ -349,7 +345,7 @@ async def get_note_coverage(
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-    content = note.document.content or ""
+    content = note.content or ""
     if not content.strip():
         return {
             "total_core_coverage": 0,
@@ -374,7 +370,7 @@ async def get_note_coverage(
     if include_anki_cards:
         try:
             anki_cards = await anki_client.get_cards_for_note(
-                note.document.title or note_id
+                note.meta.title or note_id
             )
             for ac in anki_cards:
                 cards.append(
@@ -669,7 +665,7 @@ async def analyze_coverage_apcg(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     # Get note content
-    content = note.document.content or ""
+    content = note.content or ""
     if not content.strip():
         return {"error": "Note content is empty"}
 
@@ -689,7 +685,7 @@ async def analyze_coverage_apcg(
     if include_anki_cards:
         try:
             anki_cards = await anki_client.get_cards_for_note(
-                note.document.title or note_id
+                note.meta.title or note_id
             )
             for ac in anki_cards:
                 cards.append(
@@ -779,7 +775,7 @@ async def get_coverage_summary(note_id: str, mode: str = "auto") -> dict:
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-    content = note.document.content or ""
+    content = note.content or ""
     cards = [
         {"id": c.id, "front": c.front, "back": c.back, "extra": c.extra}
         for c in note.cards

@@ -221,7 +221,10 @@
               </div>
 
               <div class="coverage-section">
-                <h5 data-i18n="coverage.gapsTitle">Gaps</h5>
+                <div class="section-label-row">
+                  <h5 data-i18n="coverage.gapsTitle">Gaps</h5>
+                  <button id="suggest-cards-for-gaps-btn" class="ghost" type="button" data-i18n="coverage.suggestCards">Suggest cards</button>
+                </div>
                 <div id="coverage-gaps" class="coverage-list" role="list" aria-label="Coverage gaps"></div>
               </div>
 
@@ -229,76 +232,6 @@
                 <h5 data-i18n="coverage.conflictsTitle">Conflicts</h5>
                 <div id="coverage-conflicts" class="coverage-list" role="list" aria-label="Coverage conflicts"></div>
               </div>
-
-              <!-- APCG Coverage Section - Integrated with existing coverage system -->
-              <div id="apcg-coverage-section" class="apcg-coverage-section">
-                <div class="apcg-section-header">
-                  <h5 class="apcg-section-title">📊 Detailed Analysis</h5>
-                  <button id="run-apcg-analysis-btn" class="primary" type="button">Analyze</button>
-                </div>
-                
-                <!-- APCG Summary Cards -->
-                <div id="apcg-summary-cards" class="apcg-summary-cards">
-                  <div class="apcg-stat-card">
-                    <div id="apcg-stat-propositions" class="apcg-stat-value">0</div>
-                    <div class="apcg-stat-label">Propositions</div>
-                  </div>
-                  <div class="apcg-stat-card apcg-stat-covered">
-                    <div id="apcg-stat-covered" class="apcg-stat-value">0</div>
-                    <div class="apcg-stat-label">Covered</div>
-                  </div>
-                  <div class="apcg-stat-card apcg-stat-uncovered">
-                    <div id="apcg-stat-uncovered" class="apcg-stat-value">0</div>
-                    <div class="apcg-stat-label">Uncovered</div>
-                  </div>
-                  <div class="apcg-stat-card apcg-stat-conflicts">
-                    <div id="apcg-stat-conflicts" class="apcg-stat-value">0</div>
-                    <div class="apcg-stat-label">Conflicts</div>
-                  </div>
-                </div>
-
-                <!-- APCG Results -->
-                <div id="apcg-results-container" class="apcg-results-container">
-                  <div class="apcg-tabs">
-                    <button class="apcg-tab-btn active" data-tab="all" type="button">All</button>
-                    <button class="apcg-tab-btn" data-tab="covered" type="button">Covered</button>
-                    <button class="apcg-tab-btn" data-tab="uncovered" type="button">Uncovered</button>
-                  </div>
-                  
-                  <div id="apcg-tab-all" class="apcg-tab-content"></div>
-                  <div id="apcg-tab-covered" class="apcg-tab-content"></div>
-                  <div id="apcg-tab-uncovered" class="apcg-tab-content"></div>
-                </div>
-
-                <!-- Loading State -->
-                <div id="apcg-loading" class="apcg-loading">
-                  <div class="loading-spinner"></div>
-                  <p class="apcg-loading-text">Analyzing...</p>
-                </div>
-
-                <!-- Empty State -->
-                <div id="apcg-empty-state" class="apcg-empty-state">
-                  <p style="font-size: 14px;">Click "Analyze" to analyze your note</p>
-                </div>
-              </div>
-            </section>
-                <section>
-                  <div class="section-label-row">
-                    <div class="section-label" data-i18n="coverage.largestGaps">Largest gaps</div>
-                    <button id="suggest-cards-for-gaps-btn" class="ghost" type="button" data-i18n="coverage.suggestCards">Suggest cards</button>
-                  </div>
-                  <div id="coverage-gaps" class="coverage-list"></div>
-                </section>
-                <section>
-                  <div class="section-label" data-i18n="coverage.unmappedCards">Cards without mapping</div>
-                  <div id="coverage-unmapped" class="coverage-list"></div>
-                </section>
-                <section>
-                  <div class="section-label" data-i18n="coverage.ankiMatches">Matching Anki cards</div>
-                  <div id="coverage-anki-matches" class="coverage-list"></div>
-                </section>
-              </div>
-
             </section>
 
             <section id="source-panel" class="inspector-panel card-surface">
@@ -477,13 +410,12 @@
           <section class="card-surface nested-card">
             <div class="panel-head inline-bottom-gap">
               <div>
-                <h4>🤖 AI Prompts</h4>
+                <h4>AI Prompts</h4>
                 <p class="muted">Flashcard generation prompts.</p>
               </div>
             </div>
             <div class="toolbar-group compact-top-gap">
               <button id="reset-prompts-btn" class="primary" type="button" style="width: 100%;">
-                <span style="font-size: 16px; margin-right: 6px;">🔄</span>
                 Reset Prompts to Default
               </button>
             </div>
@@ -493,7 +425,7 @@
           <section class="card-surface nested-card">
             <div class="panel-head inline-bottom-gap">
               <div>
-                <h4>📊 APCG Analysis</h4>
+                <h4>APCG Analysis</h4>
                 <p class="muted">Advanced Propositional Coverage Graph settings</p>
               </div>
             </div>
@@ -501,11 +433,11 @@
               <label>
                 <span>Default Analysis Mode</span>
                 <select id="apcg-default-mode">
-                  <option value="auto">🤖 Auto-detect</option>
-                  <option value="facts">📜 Facts mode</option>
-                  <option value="process">🔬 Process mode</option>
-                  <option value="definition">📖 Definition mode</option>
-                  <option value="universal">🌐 Universal mode</option>
+                  <option value="auto">Auto-detect</option>
+                  <option value="facts">Facts mode</option>
+                  <option value="process">Process mode</option>
+                  <option value="definition">Definition mode</option>
+                  <option value="universal">Universal mode</option>
                 </select>
               </label>
               <label class="checkbox-row wide">
@@ -519,7 +451,6 @@
             </div>
             <div class="toolbar-group compact-top-gap">
               <button id="reset-apcg-btn" class="ghost" type="button" style="width: 100%;">
-                <span style="font-size: 16px; margin-right: 6px;">🔄</span>
                 Reset APCG Settings
               </button>
             </div>
@@ -651,6 +582,5 @@
 
     <script src="/static/app.js" defer></script>
     <script src="/static/ai_ui.js" defer></script>
-    <script src="/static/coverage.js" defer></script>
   </body>
 </html>
