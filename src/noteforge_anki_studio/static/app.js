@@ -841,85 +841,24 @@ const attachCoverageTokenHoverHandlers = () => {
   if (!tokens) return;
   
   tokens.forEach(token => {
-    token.addEventListener('mouseenter', (e) => {
-      const propositionText = token.textContent;
-      const report = state.coverageReport;
-      if (!report || !report.propositions) return;
-      
-      // Find matching proposition
+    // Set card IDs from proposition data
+    const propositionText = token.textContent;
+    const report = state.coverageReport;
+    if (report && report.propositions) {
       const prop = report.propositions.find(p => 
         propositionText.includes(p.text.substring(0, 30)) || 
         p.text.includes(propositionText.substring(0, 30))
       );
-      
-      if (prop && prop.matched_card_ids && prop.matched_card_ids.length > 0) {
-        showCoverageTooltip(e, prop, report);
-      }
-    });
-    
-    token.addEventListener('mouseleave', removeCoverageTooltip);
-  });
-};
-
-const showCoverageTooltip = (e, proposition, report) => {
-  removeCoverageTooltip();
-  
-  // Find matched cards
-  const matchedCards = [];
-  if (state.activeNote) {
-    for (const cardId of proposition.matched_card_ids) {
-      const card = state.activeNote.cards?.find(c => c.id === cardId);
-      if (card) {
-        matchedCards.push(card);
+      if (prop && prop.matched_card_ids) {
+        token.dataset.cardIds = prop.matched_card_ids.join(',');
+        token.classList.add('covered');
       }
     }
-  }
-  
-  if (matchedCards.length === 0) return;
-  
-  const tooltip = document.createElement('div');
-  tooltip.id = 'coverage-tooltip';
-  tooltip.className = 'coverage-tooltip';
-  tooltip.innerHTML = `
-    <div class="coverage-tooltip-header">
-      <span class="coverage-tooltip-badge">${matchedCards.length} Card${matchedCards.length > 1 ? 's' : ''}</span>
-      <span class="coverage-tooltip-score">${Math.round(proposition.core_score * 100)}% covered</span>
-    </div>
-    <div class="coverage-tooltip-cards">
-      ${matchedCards.slice(0, 3).map(card => `
-        <div class="coverage-tooltip-card">
-          <div class="coverage-tooltip-card-front">${escapeHtml(card.front || '')}</div>
-          <div class="coverage-tooltip-card-back">${escapeHtml(card.back || '')}</div>
-        </div>
-      `).join('')}
-      ${matchedCards.length > 3 ? `<div class="coverage-tooltip-more">+${matchedCards.length - 3} more</div>` : ''}
-    </div>
-  `;
-  
-  document.body.appendChild(tooltip);
-  
-  // Position tooltip
-  const rect = e.target.getBoundingClientRect();
-  const tooltipRect = tooltip.getBoundingClientRect();
-  
-  let top = rect.bottom + 8;
-  let left = rect.left;
-  
-  // Adjust if tooltip goes off-screen
-  if (left + tooltipRect.width > window.innerWidth - 20) {
-    left = window.innerWidth - tooltipRect.width - 20;
-  }
-  if (top + tooltipRect.height > window.innerHeight - 20) {
-    top = rect.top - tooltipRect.height - 8;
-  }
-  
-  tooltip.style.top = `${top}px`;
-  tooltip.style.left = `${left}px`;
-};
-
-const removeCoverageTooltip = () => {
-  const existing = document.getElementById('coverage-tooltip');
-  if (existing) existing.remove();
+    
+    // Use existing hover handler
+    token.addEventListener('mouseenter', showCoverageTooltip);
+    token.addEventListener('mouseleave', removeCoverageTooltip);
+  });
 };
 
 const resetQuickCard = ({ quiet = false } = {}) => {
