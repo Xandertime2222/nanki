@@ -207,25 +207,43 @@ async def reset_apcg_settings() -> dict:
 @app.get("/api/notes/{note_id}/coverage/ai")
 async def get_ai_coverage(note_id: str, mode: str = "auto") -> dict:
     """Analyze note coverage using AI."""
-    from .ai import AIService
-    
     try:
         note = store.load_note(note_id)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    
+
     settings = settings_manager.load()
-    
-    # Create AI service with anki_client
-    anki_client = AnkiConnectClient(settings.anki_url)
-    ai_service = AIService(settings_manager, anki_client)
-    
+
     try:
         result = await ai_service.analyze_coverage_with_ai(
             settings,
             note=note,
             mode=mode
         )
+        # Normalize AI response to match APCG response format expected by frontend
+        ai_props = result.get("propositions", [])
+        for p in ai_props:
+            if "covered" in p and "matched" not in p:
+                p["matched"] = p["covered"]
+            if "coverage_score" in p and "core_score" not in p:
+                p["core_score"] = p["coverage_score"]
+            if "matched_card_ids" not in p:
+                p["matched_card_ids"] = []
+            if "id" not in p:
+                p["id"] = f"ai_{ai_props.index(p)}"
+        coverage_pct = result.get("coverage_percentage", 0.0)
+        # AI returns 0-100, frontend expects 0.0-1.0
+        if coverage_pct > 1.0:
+            coverage_pct = coverage_pct / 100.0
+        total_props = len(ai_props)
+        uncovered = len([p for p in ai_props if not p.get("matched")])
+        result["total_core_coverage"] = coverage_pct
+        result["total_exact_coverage"] = coverage_pct
+        result["total_propositions"] = total_props
+        result["uncovered_count"] = uncovered
+        result["conflicts"] = result.get("conflicts", [])
+        if "coverage_html" not in result:
+            result["coverage_html"] = ""
         return result
     except AIConfigurationError as exc:
         raise HTTPException(
@@ -409,15 +427,18 @@ async def get_note_coverage(
     if include_anki_cards:
         try:
             anki_cards = await anki_client.get_cards_for_note(
-                note.meta.title or note_id
+                note_id=note_id,
+                note_title=note.meta.title or "",
+                deck_name=note.meta.default_deck or "",
             )
             for ac in anki_cards:
                 cards.append(
                     {
-                        "id": f"anki:{ac.get('cardId', '')}",
-                        "front": ac.get("fields", {}).get("Front", ""),
-                        "back": ac.get("fields", {}).get("Back", ""),
-                        "extra": ac.get("fields", {}).get("Extra", ""),
+                        "id": ac.id,
+                        "front": ac.front or "",
+                        "back": ac.back or "",
+                        "extra": ac.extra or "",
+                        "source_excerpt": ac.source_excerpt or "",
                     }
                 )
         except Exception:
@@ -425,10 +446,14 @@ async def get_note_coverage(
 
     mode_map = {
         "auto": CoverageMode.AUTO,
-        "facts": CoverageMode.FACTS,
-        "process": CoverageMode.PROCESS,
-        "definition": CoverageMode.DEFINITION,
+        "history": CoverageMode.HISTORY,
+        "science": CoverageMode.SCIENCE,
+        "vocabulary": CoverageMode.VOCABULARY,
         "universal": CoverageMode.UNIVERSAL,
+        # backward compat
+        "facts": CoverageMode.HISTORY,
+        "process": CoverageMode.SCIENCE,
+        "definition": CoverageMode.VOCABULARY,
     }
     coverage_mode = mode_map.get(mode.lower(), CoverageMode.AUTO)
     config = CoverageConfig(
@@ -718,6 +743,7 @@ async def analyze_coverage_apcg(
                 "front": card.front or "",
                 "back": card.back or "",
                 "extra": card.extra or "",
+                "source_excerpt": card.source_excerpt or "",
             }
         )
 
@@ -725,15 +751,18 @@ async def analyze_coverage_apcg(
     if include_anki_cards:
         try:
             anki_cards = await anki_client.get_cards_for_note(
-                note.meta.title or note_id
+                note_id=note_id,
+                note_title=note.meta.title or "",
+                deck_name=note.meta.default_deck or "",
             )
             for ac in anki_cards:
                 cards.append(
                     {
-                        "id": f"anki:{ac.get('cardId', '')}",
-                        "front": ac.get("fields", {}).get("Front", ""),
-                        "back": ac.get("fields", {}).get("Back", ""),
-                        "extra": ac.get("fields", {}).get("Extra", ""),
+                        "id": ac.id,
+                        "front": ac.front or "",
+                        "back": ac.back or "",
+                        "extra": ac.extra or "",
+                        "source_excerpt": ac.source_excerpt or "",
                     }
                 )
         except Exception:
@@ -742,10 +771,14 @@ async def analyze_coverage_apcg(
     # Map mode string to enum
     mode_map = {
         "auto": CoverageMode.AUTO,
-        "facts": CoverageMode.FACTS,
-        "process": CoverageMode.PROCESS,
-        "definition": CoverageMode.DEFINITION,
+        "history": CoverageMode.HISTORY,
+        "science": CoverageMode.SCIENCE,
+        "vocabulary": CoverageMode.VOCABULARY,
         "universal": CoverageMode.UNIVERSAL,
+        # backward compat
+        "facts": CoverageMode.HISTORY,
+        "process": CoverageMode.SCIENCE,
+        "definition": CoverageMode.VOCABULARY,
     }
     coverage_mode = mode_map.get(mode.lower(), CoverageMode.AUTO)
 
@@ -817,16 +850,20 @@ async def get_coverage_summary(note_id: str, mode: str = "auto") -> dict:
 
     content = note.content or ""
     cards = [
-        {"id": c.id, "front": c.front, "back": c.back, "extra": c.extra}
+        {"id": c.id, "front": c.front, "back": c.back, "extra": c.extra, "source_excerpt": c.source_excerpt or ""}
         for c in note.cards
     ]
 
     mode_map = {
         "auto": CoverageMode.AUTO,
-        "facts": CoverageMode.FACTS,
-        "process": CoverageMode.PROCESS,
-        "definition": CoverageMode.DEFINITION,
+        "history": CoverageMode.HISTORY,
+        "science": CoverageMode.SCIENCE,
+        "vocabulary": CoverageMode.VOCABULARY,
         "universal": CoverageMode.UNIVERSAL,
+        # backward compat
+        "facts": CoverageMode.HISTORY,
+        "process": CoverageMode.SCIENCE,
+        "definition": CoverageMode.VOCABULARY,
     }
     coverage_mode = mode_map.get(mode.lower(), CoverageMode.AUTO)
     config = CoverageConfig(mode=coverage_mode)

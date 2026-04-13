@@ -38,6 +38,7 @@ class AISettings(BaseModel):
     default_model: str = ""
     chat_model: str = ""
     explain_model: str = ""
+    flashcard_model: str = ""
     auto_flashcard_model: str = ""
     language: AppLanguage = "en"
     use_anki_coverage_context: bool = True

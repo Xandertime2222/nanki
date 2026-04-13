@@ -656,11 +656,15 @@
     ai.ollama_cloud_api_key = aiEls.aiOllamaCloudKey?.value.trim() || '';
     ai.openrouter_url = aiEls.aiOpenrouterUrl?.value.trim() || DEFAULT_AI_SETTINGS.openrouter_url;
     ai.openrouter_api_key = aiEls.aiOpenrouterKey?.value.trim() || '';
-    ai.default_model = aiEls.aiDefaultModel?.value.trim() || '';
-    ai.chat_model = aiEls.aiChatModel?.value.trim() || '';
-    ai.explain_model = aiEls.aiExplainModel?.value.trim() || '';
-    ai.flashcard_model = aiEls.aiFlashcardModel?.value.trim() || '';
-    ai.auto_flashcard_model = aiEls.aiAutoFlashcardModel?.value.trim() || '';
+    // Only read model selects if options have been populated; otherwise keep existing value.
+    const hasModelOptions = (uiState.modelOptions || []).length > 0;
+    if (hasModelOptions) {
+      ai.default_model = aiEls.aiDefaultModel?.value.trim() || '';
+      ai.chat_model = aiEls.aiChatModel?.value.trim() || '';
+      ai.explain_model = aiEls.aiExplainModel?.value.trim() || '';
+      ai.flashcard_model = aiEls.aiFlashcardModel?.value.trim() || '';
+      ai.auto_flashcard_model = aiEls.aiAutoFlashcardModel?.value.trim() || '';
+    }
     ai.language = aiEls.aiLanguage?.value || 'en';
     ai.chat_note_only = Boolean(aiEls.aiChatNoteOnly?.checked);
     ai.explain_note_only = Boolean(aiEls.aiExplainNoteOnly?.checked);
@@ -676,15 +680,23 @@
   function refreshModelInputs() {
     const modelOptions = uiState.modelOptions || [];
     const optionsHtml = modelOptions.map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name || item.id)}</option>`).join('');
-    
-    const selects = ['ai-default-model', 'ai-chat-model', 'ai-explain-model', 'ai-flashcard-model', 'ai-auto-flashcard-model'];
-    selects.forEach((id) => {
+    const ai = ensureAiSettings();
+
+    // Map element IDs to the setting keys they correspond to
+    const selectMap = {
+      'ai-default-model': ai.default_model || '',
+      'ai-chat-model': ai.chat_model || '',
+      'ai-explain-model': ai.explain_model || '',
+      'ai-flashcard-model': ai.flashcard_model || '',
+      'ai-auto-flashcard-model': ai.auto_flashcard_model || '',
+    };
+    Object.entries(selectMap).forEach(([id, savedValue]) => {
       const el = document.getElementById(id);
       if (el) {
-        const current = el.value;
         el.innerHTML = `<option value="">${lt('ai.selectModel')}</option>${optionsHtml}`;
-        if (current && modelOptions.some(m => m.id === current)) {
-          el.value = current;
+        // Restore the saved value from settings (not the DOM value which may have been cleared)
+        if (savedValue && modelOptions.some(m => m.id === savedValue)) {
+          el.value = savedValue;
         }
       }
     });
@@ -832,6 +844,7 @@
     if (uiState.isRefreshingModels) return;
     uiState.isRefreshingModels = true;
     try {
+      // Save non-model settings before fetching (model fields are protected when options are empty)
       await saveCurrentSettingsQuietly();
       const result = await getApi().fetchJson(test ? '/api/ai/test' : '/api/ai/models', { method: test ? 'POST' : 'GET' });
       uiState.modelOptions = result.models || [];
@@ -840,8 +853,10 @@
       renderAiSettingsStatus();
       if (!ensureAiSettings().default_model && uiState.modelOptions[0]) {
         aiEls.aiDefaultModel.value = uiState.modelOptions[0].id;
-        syncAiSettingsFromInputs();
       }
+      // Now that model options are loaded and dropdowns restored, sync and save
+      syncAiSettingsFromInputs();
+      await getApi()?.saveSettings?.({ quiet: true, reloadNotes: false });
       if (!quiet) getApi()?.showToast?.(lt('ai.connectionOk'));
     } catch (error) {
       uiState.connectionInfo = { ok: false, error: error.message || String(error) };
@@ -1048,6 +1063,8 @@
         syncAiSettingsFromInputs();
         if (node === aiEls.aiProvider) renderAiSettingsFromState();
         if (node === aiEls.aiEnabled) renderAiVisibility();
+        // Auto-save on any AI settings change
+        getApi()?.saveSettings?.({ quiet: true, reloadNotes: false });
       });
     });
   }
@@ -1112,9 +1129,8 @@
     document.addEventListener('nanki:settings-changed', (event) => {
       renderAiSettingsFromState();
       applyTranslations();
-      syncAiSettingsFromInputs();
       const ai = ensureAiSettings();
-      if (event?.detail?.source === 'load' && ai.enabled && ai.provider === 'ollama_local' && ai.auto_detect_ollama_models) {
+      if (event?.detail?.source === 'load' && ai.enabled) {
         refreshAiModels({ quiet: true }).catch(() => undefined);
       }
     });
@@ -1148,9 +1164,9 @@
     renderAiContextPills();
     renderQuickCardEnhancements();
     window.setTimeout(() => {
-      const ai = ensureAiSettings();
       renderAiSettingsFromState();
-      if (ai.enabled && ai.provider === 'ollama_local' && ai.auto_detect_ollama_models) {
+      const ai = ensureAiSettings();
+      if (ai.enabled) {
         refreshAiModels({ quiet: true }).catch(() => undefined);
       }
     }, 250);

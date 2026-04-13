@@ -220,6 +220,9 @@ class AnkiConnectClient:
             front = ordered_fields[0][2] if ordered_fields else str(info.get("question") or "")
             back = ordered_fields[1][2] if len(ordered_fields) > 1 else str(info.get("answer") or "")
             extra = ordered_fields[2][2] if len(ordered_fields) > 2 else ""
+        raw_tags = info.get("tags") or []
+        if isinstance(raw_tags, str):
+            raw_tags = raw_tags.split()
         return AnkiLibraryCard(
             id=f"anki:{info.get('cardId')}",
             note_id=str(info.get("note")) if info.get("note") is not None else None,
@@ -229,6 +232,7 @@ class AnkiConnectClient:
             front=front,
             back=back,
             extra=extra,
+            tags=list(raw_tags),
         )
 
     async def fetch_all_cards_for_coverage(self, *, force_refresh: bool = False) -> list[AnkiLibraryCard]:
@@ -260,3 +264,61 @@ class AnkiConnectClient:
 
         self._library_cache = (now, library_cards)
         return list(library_cards)
+
+    async def get_cards_for_note(
+        self, note_id: str, note_title: str = "", deck_name: str = ""
+    ) -> list[AnkiLibraryCard]:
+        """Fetch Anki cards relevant to a specific note.
+
+        Tries multiple strategies:
+        1. Search by nanki note tag (cards pushed from this note)
+        2. Search by deck name matching
+        3. Fall back to all cached library cards
+        """
+        tag_query = f"tag:nanki-note-{note_id}"
+        try:
+            card_ids = await self.invoke("findCards", {"query": tag_query})
+            card_ids = list(card_ids or [])
+        except Exception:
+            card_ids = []
+
+        # If tag search found nothing, try deck-based search
+        if not card_ids and deck_name:
+            try:
+                deck_query = f'"deck:{deck_name}"'
+                card_ids = await self.invoke("findCards", {"query": deck_query})
+                card_ids = list(card_ids or [])
+            except Exception:
+                card_ids = []
+
+        if not card_ids:
+            # Fall back to cached library and filter by tag or title heuristic
+            try:
+                all_cards = await self.fetch_all_cards_for_coverage()
+                note_tag = f"nanki-note-{note_id}"
+                matched = [c for c in all_cards if note_tag in c.tags]
+                if matched:
+                    return matched
+                # Also try matching by deck name
+                if deck_name:
+                    matched = [c for c in all_cards if c.deck_name.casefold() == deck_name.casefold()]
+                    if matched:
+                        return matched
+                # Last resort: match by title keywords in deck name
+                if note_title:
+                    title_lower = note_title.casefold()
+                    matched = [c for c in all_cards if title_lower in c.deck_name.casefold()
+                               or c.deck_name.casefold() in title_lower]
+                    if matched:
+                        return matched
+                return all_cards
+            except Exception:
+                return []
+
+        # Fetch full card info for found IDs
+        library_cards: list[AnkiLibraryCard] = []
+        for chunk in self._chunked(card_ids, 250):
+            chunk_info = await self.invoke("cardsInfo", {"cards": chunk})
+            for item in chunk_info or []:
+                library_cards.append(self._library_card_from_cards_info(item))
+        return library_cards

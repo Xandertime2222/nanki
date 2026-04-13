@@ -1,9 +1,9 @@
 """APCG Coverage Algorithm v2 - With Specialized Modes.
 
-Implements the APCG algorithm with 4 specialized modes:
-1. FACTS - History, Geography, Events (dates, names, places)
-2. PROCESS - Biology, Medicine, Chemistry (causal relationships)
-3. DEFINITION - Vocabulary, Concepts, Theories (definitions, synonyms)
+Implements the APCG algorithm with 5 specialized modes based on study subjects:
+1. HISTORY - History, Geography, Events (dates, names, places)
+2. SCIENCE - Biology, Medicine, Chemistry (causal relationships, processes)
+3. VOCABULARY - Vocabulary, Concepts, Theories (definitions, synonyms)
 4. UNIVERSAL - Mixed content (balanced approach)
 
 Also considers front/back card relationships for better matching.
@@ -23,15 +23,20 @@ from enum import Enum
 
 
 class CoverageMode(Enum):
-    """Coverage algorithm modes."""
-    FACTS = "facts"
-    PROCESS = "process"
-    DEFINITION = "definition"
+    """Coverage algorithm modes mapped to study subjects."""
+    HISTORY = "history"         # was FACTS
+    SCIENCE = "science"         # was PROCESS
+    VOCABULARY = "vocabulary"   # was DEFINITION
     UNIVERSAL = "universal"
     AUTO = "auto"
+    # Keep old names as aliases for backward compatibility
+    FACTS = "history"
+    PROCESS = "science"
+    DEFINITION = "vocabulary"
 
 
-CoverageModeStr = Literal["facts", "process", "definition", "universal", "auto"]
+CoverageModeStr = Literal["history", "science", "vocabulary", "universal", "auto",
+                           "facts", "process", "definition"]
 
 
 # ---------------------------------------------------------------------------
@@ -212,8 +217,17 @@ ABBREVIATIONS = frozenset({
 
 
 def _is_abbreviation(text: str, dot_pos: int) -> bool:
-    """Check if period at dot_pos is part of an abbreviation."""
+    """Check if period at dot_pos is part of an abbreviation or ordinal number."""
+    # Check for ordinal numbers (e.g. "13.", "1.", "21." - typically 1-2 digits, common in German)
     i = dot_pos - 1
+    if i >= 0 and text[i].isdigit():
+        num_start = i
+        while num_start > 0 and text[num_start - 1].isdigit():
+            num_start -= 1
+        num_len = dot_pos - num_start
+        # Ordinals are 1-2 digits (rarely 3); years (4+ digits) end sentences
+        if num_len <= 2:
+            return True
     while i >= 0 and text[i].isalpha():
         i -= 1
     word = text[i + 1:dot_pos].lower()
@@ -228,37 +242,51 @@ def discourse_segment(text: str) -> list[tuple[int, int, str]]:
     """Split text into discourse segments (sentences with positions)."""
     if not text.strip():
         return []
-    
-    # Remove markdown headings from content for analysis
-    clean_text = re.sub(r'^#{1,6}\s+.*$', '', text, flags=re.MULTILINE)
-    clean_text = re.sub(r'\n{3,}', '\n\n', clean_text)
-    
+
+    # Remove markdown headings but track a position map (clean -> original)
+    clean_chars: list[str] = []
+    pos_map: list[int] = []  # pos_map[clean_idx] = original_idx
+    heading_re = re.compile(r'^#{1,6}\s+.*$', re.MULTILINE)
+    heading_spans = {(m.start(), m.end()) for m in heading_re.finditer(text)}
+
+    i = 0
+    while i < len(text):
+        in_heading = any(s <= i < e for s, e in heading_spans)
+        if in_heading:
+            i += 1
+            continue
+        clean_chars.append(text[i])
+        pos_map.append(i)
+        i += 1
+
+    clean_text = "".join(clean_chars)
+
     segments: list[tuple[int, int, str]] = []
     boundaries: list[int] = []
-    
+
     # Find sentence boundaries
     for m in SENTENCE_BOUNDARY.finditer(clean_text):
         punct_pos = m.start()
         if m.group(1) == "." and _is_abbreviation(clean_text, punct_pos):
             continue
         boundaries.append(punct_pos + 1)
-    
+
     # Build segments
     starts = [0] + boundaries
     ends = boundaries + [len(clean_text)]
-    
+
     for s, e in zip(starts, ends, strict=False):
         chunk = clean_text[s:e].strip()
-        # Skip empty chunks and very short ones (less than 4 chars)
         if chunk and len(chunk) >= 4:
-            # Find actual position in original text
-            orig_start = text.find(chunk, max(0, s - 50))
-            if orig_start >= 0:
-                orig_end = orig_start + len(chunk)
-                segments.append((orig_start, orig_end, chunk))
-            else:
-                segments.append((s, e, chunk))
-    
+            # Find stripped start in clean_text
+            strip_offset = clean_text[s:e].index(chunk)
+            clean_start = s + strip_offset
+            clean_end = clean_start + len(chunk)
+            # Map back to original positions
+            orig_start = pos_map[clean_start] if clean_start < len(pos_map) else s
+            orig_end = (pos_map[clean_end - 1] + 1) if clean_end - 1 < len(pos_map) else e
+            segments.append((orig_start, orig_end, chunk))
+
     return segments
 
 
@@ -308,9 +336,9 @@ def detect_text_type(text: str) -> CoverageMode:
     
     # Determine winner
     scores = {
-        CoverageMode.FACTS: facts_score,
-        CoverageMode.PROCESS: process_score,
-        CoverageMode.DEFINITION: definition_score,
+        CoverageMode.HISTORY: facts_score,
+        CoverageMode.SCIENCE: process_score,
+        CoverageMode.VOCABULARY: definition_score,
     }
     
     max_score = max(scores.values())
@@ -456,11 +484,11 @@ def _extract_slots_universal(text: str) -> dict[str, str]:
 
 def _identify_core_slots(slots: dict[str, str], mode: CoverageMode) -> list[str]:
     """Identify core slots based on mode."""
-    if mode == CoverageMode.FACTS:
+    if mode == CoverageMode.HISTORY:
         return [k for k in ["year", "event", "person", "location"] if k in slots] or list(slots.keys())[:2]
-    elif mode == CoverageMode.PROCESS:
+    elif mode == CoverageMode.SCIENCE:
         return [k for k in ["cause", "effect", "product", "location"] if k in slots] or list(slots.keys())[:2]
-    elif mode == CoverageMode.DEFINITION:
+    elif mode == CoverageMode.VOCABULARY:
         return [k for k in ["term", "definition", "category"] if k in slots] or list(slots.keys())[:2]
     else:  # UNIVERSAL
         return list(slots.keys())[:3]
@@ -468,11 +496,11 @@ def _identify_core_slots(slots: dict[str, str], mode: CoverageMode) -> list[str]
 
 def _identify_critical_slots(slots: dict[str, str], mode: CoverageMode) -> list[str]:
     """Identify critical slots based on mode."""
-    if mode == CoverageMode.FACTS:
+    if mode == CoverageMode.HISTORY:
         return [k for k in ["year", "event", "person"] if k in slots] or list(slots.keys())[:1]
-    elif mode == CoverageMode.PROCESS:
+    elif mode == CoverageMode.SCIENCE:
         return [k for k in ["product", "cause", "location"] if k in slots] or list(slots.keys())[:1]
-    elif mode == CoverageMode.DEFINITION:
+    elif mode == CoverageMode.VOCABULARY:
         return [k for k in ["term", "category"] if k in slots] or list(slots.keys())[:1]
     else:  # UNIVERSAL
         return list(slots.keys())[:1]
@@ -498,11 +526,11 @@ def semantic_parse(
     start, end, text = segment
     
     # Extract slots based on mode
-    if mode == CoverageMode.FACTS:
+    if mode == CoverageMode.HISTORY:
         slots = _extract_slots_facts(text)
-    elif mode == CoverageMode.PROCESS:
+    elif mode == CoverageMode.SCIENCE:
         slots = _extract_slots_process(text)
-    elif mode == CoverageMode.DEFINITION:
+    elif mode == CoverageMode.VOCABULARY:
         slots = _extract_slots_definition(text)
     else:
         slots = _extract_slots_universal(text)
@@ -513,6 +541,8 @@ def semantic_parse(
         if len(words) >= 3:
             slots["subject"] = " ".join(words[:2])
             slots["predicate"] = " ".join(words[2:])
+        elif words:
+            slots["content"] = text
     
     core_slots = _identify_core_slots(slots, mode)
     critical_slots = _identify_critical_slots(slots, mode)
@@ -611,11 +641,11 @@ def parse_question_answer_into_evidence(
     # Extract slots from front
     front_slots = {}
     if front and len(front.strip()) >= 5:
-        if mode == CoverageMode.FACTS:
+        if mode == CoverageMode.HISTORY:
             front_slots = _extract_slots_facts(front)
-        elif mode == CoverageMode.PROCESS:
+        elif mode == CoverageMode.SCIENCE:
             front_slots = _extract_slots_process(front)
-        elif mode == CoverageMode.DEFINITION:
+        elif mode == CoverageMode.VOCABULARY:
             front_slots = _extract_slots_definition(front)
         else:
             front_slots = _extract_slots_universal(front)
@@ -623,11 +653,11 @@ def parse_question_answer_into_evidence(
     # Extract slots from back (PRIMARY evidence source)
     back_slots = {}
     if back and len(back.strip()) >= 5:
-        if mode == CoverageMode.FACTS:
+        if mode == CoverageMode.HISTORY:
             back_slots = _extract_slots_facts(back)
-        elif mode == CoverageMode.PROCESS:
+        elif mode == CoverageMode.SCIENCE:
             back_slots = _extract_slots_process(back)
-        elif mode == CoverageMode.DEFINITION:
+        elif mode == CoverageMode.VOCABULARY:
             back_slots = _extract_slots_definition(back)
         else:
             back_slots = _extract_slots_universal(back)
@@ -650,11 +680,11 @@ def parse_question_answer_into_evidence(
     if front and back:
         combined_text = f"{front} {back}"
         combined_slots = {}
-        if mode == CoverageMode.FACTS:
+        if mode == CoverageMode.HISTORY:
             combined_slots = _extract_slots_facts(combined_text)
-        elif mode == CoverageMode.PROCESS:
+        elif mode == CoverageMode.SCIENCE:
             combined_slots = _extract_slots_process(combined_text)
-        elif mode == CoverageMode.DEFINITION:
+        elif mode == CoverageMode.VOCABULARY:
             combined_slots = _extract_slots_definition(combined_text)
         else:
             combined_slots = _extract_slots_universal(combined_text)
@@ -700,6 +730,28 @@ def parse_question_answer_into_evidence(
                 card_type=card_type,
             ))
     
+    # Fallback: If no evidence was created, always create at least a combined entry
+    if not evidences and front and back:
+        combined_text = f"{front} {back}"
+        words = combined_text.split()
+        fallback_slots = {}
+        if len(words) >= 3:
+            fallback_slots["subject"] = " ".join(words[:2])
+            fallback_slots["predicate"] = " ".join(words[2:])
+        elif words:
+            fallback_slots["content"] = combined_text
+        evidences.append(Evidence(
+            id=f"evidence_{card_id}_fallback",
+            card_id=card_id,
+            front_text=front[:200],
+            back_text=back[:200],
+            front_slots=fallback_slots,
+            back_slots=fallback_slots,
+            combined_slots=fallback_slots,
+            source="combined",
+            card_type=card_type,
+        ))
+
     # Priority 5: Source excerpt matching (HIGHEST PRIORITY for accurate coverage)
     if source_excerpt and len(source_excerpt.strip()) >= 5:
         excerpt_slots = _extract_slots_universal(source_excerpt)
@@ -813,74 +865,146 @@ def deduplicate_near_identical_cards(evidence_list: list[Evidence]) -> list[Evid
 # ---------------------------------------------------------------------------
 
 
+def _normalize_word(word: str) -> str:
+    """Normalize a word for matching: lowercase, strip punctuation."""
+    return re.sub(r'[^\w]', '', word.lower())
+
+
+def _get_word_stems(word: str) -> set[str]:
+    """Get simple stems for a word to handle German inflections.
+
+    Focuses on suffix removal for plurals/cases. Does NOT attempt
+    compound-word splitting (too error-prone without a dictionary).
+    """
+    w = _normalize_word(word)
+    if len(w) < 4:
+        return set()
+    stems = {w}
+    # Simple suffix removal for German inflections (longest match first)
+    for suffix in ("ungen", "keit", "heit", "tion", "ische", "isch",
+                    "liche", "lich", "ige", "en", "er", "es", "em",
+                    "ig", "te", "st", "nd", "e", "n", "s"):
+        remainder = len(w) - len(suffix)
+        if remainder >= 4 and w.endswith(suffix):
+            stems.add(w[:remainder])
+            break
+    return stems
+
+
+def _extract_content_words(text: str) -> set[str]:
+    """Extract meaningful content words from text, with stemming."""
+    stop_words = {"der", "die", "das", "ein", "eine", "ist", "sind", "war", "hat",
+                  "haben", "wird", "werden", "the", "a", "an", "is", "are", "es",
+                  "er", "sie", "und", "oder", "aber", "auch", "nicht", "bei", "von",
+                  "mit", "auf", "aus", "nach", "als", "man", "des", "dem", "den",
+                  "zur", "zum", "für", "nur", "sich", "wie", "was", "kann", "this",
+                  "that", "and", "for", "with", "from", "was", "were", "been", "have",
+                  "has", "had", "can", "will", "which", "their", "than", "into",
+                  "each", "these", "those", "here", "there", "mehr", "sehr", "noch",
+                  "über", "unter", "durch", "ohne", "gegen", "nach", "vor", "bis",
+                  "seit", "weil", "wenn", "dann", "also", "doch", "schon", "etwa",
+                  "alle", "viele", "einige", "andere", "erste", "ersten", "jeder",
+                  "solche", "dabei", "sowie", "daher", "damit", "dazu", "zwischen"}
+    words = set()
+    for match in re.finditer(r'\b\w+\b', text.lower()):
+        w = match.group()
+        if len(w) >= 3 and w not in stop_words and not w.isdigit():
+            words.add(w)
+            # Add stems
+            for stem in _get_word_stems(w):
+                if len(stem) >= 3:
+                    words.add(stem)
+    return words
+
+
 def build_retrieval_index(evidence_list: list[Evidence]) -> dict[str, list[Evidence]]:
-    """Build inverted index for evidence retrieval."""
+    """Build inverted index for evidence retrieval.
+
+    Indexes by:
+    1. Slot name:value pairs
+    2. Individual words from slot values
+    3. ALL words from card front/back/extra text (critical for matching!)
+    4. Card type
+    """
     index: dict[str, list[Evidence]] = {}
-    
+
+    def _add_to_index(key: str, ev: Evidence) -> None:
+        if key not in index:
+            index[key] = []
+        if ev not in index[key]:
+            index[key].append(ev)
+
     for ev in evidence_list:
         # Index by all slot sources
         for slot_dict in [ev.front_slots, ev.back_slots, ev.combined_slots]:
             for slot_name, slot_value in slot_dict.items():
                 if not slot_value:
                     continue
-                
-                # Index by slot name + value
-                key = f"{slot_name}:{slot_value}"
-                if key not in index:
-                    index[key] = []
-                index[key].append(ev)
-                
-                # Index by individual words
-                words = slot_value.split()
-                for word in words:
-                    if len(word) >= 3:
-                        if word not in index:
-                            index[word] = []
-                        index[word].append(ev)
-        
+                _add_to_index(f"{slot_name}:{slot_value}", ev)
+                for word in _extract_content_words(slot_value):
+                    _add_to_index(word, ev)
+
+        # Index by ALL words from card text (this is the critical addition!)
+        for text_field in [ev.front_text, ev.back_text, ev.extra_text]:
+            if text_field:
+                for word in _extract_content_words(text_field):
+                    _add_to_index(word, ev)
+
         # Index by card type
         if ev.card_type != "general":
-            if ev.card_type not in index:
-                index[ev.card_type] = []
-            index[ev.card_type].append(ev)
-    
+            _add_to_index(ev.card_type, ev)
+
     return index
 
 
 def retrieve_top_k(
     index: dict[str, list[Evidence]],
     proposition: Proposition,
-    k: int = 5,
+    k: int = 10,
 ) -> list[Evidence]:
-    """Retrieve top-k evidence candidates for a proposition."""
+    """Retrieve top-k evidence candidates for a proposition.
+
+    Uses both slot-based and full-text word matching for retrieval.
+    """
     candidates: dict[str, Evidence] = {}
     scores: dict[str, float] = {}
-    
+
+    # Match by slot values
     for slot_name, slot_value in proposition.slots.items():
         if not slot_value:
             continue
-        
-        # Exact slot match
+
+        # Exact slot match (highest weight)
         key = f"{slot_name}:{slot_value}"
         if key in index:
             for ev in index[key]:
                 if ev.card_id not in candidates:
                     candidates[ev.card_id] = ev
-                    scores[ev.card_id] = 2.0
+                    scores[ev.card_id] = 3.0
                 else:
-                    scores[ev.card_id] += 2.0
-        
-        # Word-level match
-        words = slot_value.split()
-        for word in words:
-            if len(word) >= 3 and word in index:
+                    scores[ev.card_id] += 3.0
+
+        # Word-level match from slots
+        for word in _extract_content_words(slot_value):
+            if word in index:
                 for ev in index[word]:
                     if ev.card_id not in candidates:
                         candidates[ev.card_id] = ev
                         scores[ev.card_id] = 1.0
                     else:
                         scores[ev.card_id] += 0.5
-    
+
+    # Also match by proposition TEXT words (critical for matching!)
+    prop_words = _extract_content_words(proposition.text)
+    for word in prop_words:
+        if word in index:
+            for ev in index[word]:
+                if ev.card_id not in candidates:
+                    candidates[ev.card_id] = ev
+                    scores[ev.card_id] = 1.0
+                else:
+                    scores[ev.card_id] += 0.5
+
     # Sort by score and return top-k
     sorted_ids = sorted(scores.keys(), key=lambda x: scores[x], reverse=True)
     return [candidates[cid] for cid in sorted_ids[:k]]
@@ -922,64 +1046,96 @@ def slot_match(
         overlap_len = min(len(ev_lower), len(prop_lower))
         return 0.7 + 0.3 * (overlap_len / max(len(ev_lower), len(prop_lower)))
     
-    # Word overlap (Jaccard-style)
-    ev_words = set(ev_lower.split())
-    prop_words = set(prop_lower.split())
-    
-    # Filter stop words
-    stop_words = {"der", "die", "das", "ein", "eine", "ist", "sind", "war", "hat", "haben", 
-                  "wird", "werden", "the", "a", "an", "is", "are", "es", "er", "sie"}
-    ev_words_filtered = {w for w in ev_words if len(w) > 2 and w not in stop_words}
-    prop_words_filtered = {w for w in prop_words if len(w) > 2 and w not in stop_words}
-    
-    if not prop_words_filtered:
+    # Word overlap with stem matching
+    ev_words = _extract_content_words(ev_value)
+    prop_words = _extract_content_words(prop_value)
+
+    if not prop_words:
         return 0.0
-    
-    overlap = len(ev_words_filtered & prop_words_filtered)
-    return overlap / len(prop_words_filtered)
+
+    overlap = len(ev_words & prop_words)
+    return overlap / len(prop_words)
 
 
-def text_overlap_score(evidence: Evidence, proposition: Proposition) -> float:
-    """Calculate keyword overlap between full texts."""
-    stop_words = {"der", "die", "das", "ein", "eine", "ist", "sind", "war", "hat", "haben",
-                  "wird", "werden", "the", "a", "an", "is", "are", "es", "er", "sie"}
-    
-    # Use back text as primary (contains answers)
-    ev_text = evidence.back_text if evidence.back_text else evidence.front_text
+def text_overlap_score(
+    evidence: Evidence,
+    proposition: Proposition,
+    mode: CoverageMode = CoverageMode.UNIVERSAL,
+) -> float:
+    """Calculate keyword overlap between full texts with stem matching.
+
+    Mode-aware: different modes weight certain word matches more heavily.
+    """
+    # Combine all evidence text
+    ev_parts = [evidence.back_text, evidence.front_text, evidence.extra_text]
+    ev_text = " ".join(p for p in ev_parts if p)
     prop_text = proposition.text
-    
-    ev_words = set(ev_text.lower().split())
-    prop_words = set(prop_text.lower().split())
-    
-    ev_filtered = {w for w in ev_words if len(w) > 2 and w not in stop_words}
-    prop_filtered = {w for w in prop_words if len(w) > 2 and w not in stop_words}
-    
-    if not prop_filtered:
+
+    ev_words = _extract_content_words(ev_text)
+    prop_words = _extract_content_words(prop_text)
+
+    if not prop_words:
         return 0.0
-    
-    overlap = len(ev_filtered & prop_filtered)
-    return overlap / len(prop_filtered)
+
+    overlap = ev_words & prop_words
+    base_score = len(overlap) / len(prop_words)
+
+    # Mode-specific bonus: reward overlap on mode-critical terms
+    bonus = 0.0
+    if mode == CoverageMode.HISTORY:
+        # Year / date tokens are critical for history
+        year_re = re.compile(r'\b(1\d{3}|2\d{3})\b')
+        prop_years = set(year_re.findall(prop_text))
+        ev_years = set(year_re.findall(ev_text))
+        if prop_years and prop_years & ev_years:
+            bonus += 0.15
+        # Proper nouns (capitalized words) matter more
+        prop_names = {w.lower() for w in re.findall(r'\b[A-ZÄÖÜ][a-zäöüß]{2,}\b', prop_text)}
+        ev_names = {w.lower() for w in re.findall(r'\b[A-ZÄÖÜ][a-zäöüß]{2,}\b', ev_text)}
+        if prop_names:
+            name_overlap = len(prop_names & ev_names) / len(prop_names)
+            bonus += name_overlap * 0.10
+    elif mode == CoverageMode.SCIENCE:
+        # Numeric quantities and technical terms are critical
+        prop_nums = set(re.findall(r'\b\d+(?:[.,]\d+)?\s*(?:mg|g|kg|ml|l|m|km|°C|mol|Hz|nm|%)\b', prop_text, re.I))
+        ev_nums = set(re.findall(r'\b\d+(?:[.,]\d+)?\s*(?:mg|g|kg|ml|l|m|km|°C|mol|Hz|nm|%)\b', ev_text, re.I))
+        if prop_nums and prop_nums & ev_nums:
+            bonus += 0.15
+        # Long technical words (>8 chars) carry more weight in science
+        long_overlap = {w for w in overlap if len(w) > 8}
+        long_prop = {w for w in prop_words if len(w) > 8}
+        if long_prop:
+            bonus += (len(long_overlap) / len(long_prop)) * 0.10
+    elif mode == CoverageMode.VOCABULARY:
+        # The defining term (first few content words) must match
+        prop_term_words = list(prop_words)[:3]
+        if prop_term_words:
+            term_matches = sum(1 for w in prop_term_words if w in ev_words)
+            bonus += (term_matches / len(prop_term_words)) * 0.15
+
+    return min(1.0, base_score + bonus)
 
 
-def front_back_coherence_score(evidence: Evidence, proposition: Proposition) -> float:
+def front_back_coherence_score(
+    evidence: Evidence,
+    proposition: Proposition,
+    mode: CoverageMode = CoverageMode.UNIVERSAL,
+) -> float:
     """Check if front/back relationship matches proposition structure."""
-    # If proposition is a fact and card is Q&A with good back coverage
-    if evidence.card_type == "question_answer":
-        # Check if back covers the proposition well
-        back_overlap = text_overlap_score(
-            Evidence(id="", card_id="", back_text=evidence.back_text, back_slots=evidence.back_slots),
-            proposition
-        )
-        # Check if front relates to proposition topic
-        front_overlap = text_overlap_score(
-            Evidence(id="", card_id="", front_text=evidence.front_text, front_slots=evidence.front_slots),
-            proposition
-        )
-        
-        # Good coherence if back covers proposition and front asks about it
-        if back_overlap > 0.3 and front_overlap > 0.1:
-            return 0.8
-    
+    # Check if back covers the proposition well
+    back_ev = Evidence(id="", card_id="", back_text=evidence.back_text, back_slots=evidence.back_slots)
+    back_overlap = text_overlap_score(back_ev, proposition, mode)
+
+    # Check if front relates to proposition topic
+    front_ev = Evidence(id="", card_id="", front_text=evidence.front_text, front_slots=evidence.front_slots)
+    front_overlap = text_overlap_score(front_ev, proposition, mode)
+
+    # Either side matching is good
+    if back_overlap > 0.2 and front_overlap > 0.1:
+        return max(back_overlap, 0.7)
+    if back_overlap > 0.3 or front_overlap > 0.3:
+        return max(back_overlap, front_overlap) * 0.8
+
     return 0.0
 
 
@@ -1129,8 +1285,8 @@ def calculate_proposition_coverage(
             # Accumulate coverage
             slot_coverage[slot_name] = 1 - (1 - slot_coverage[slot_name]) * (1 - rho * c)
         
-        # Text-level overlap (fallback)
-        text_overlap = text_overlap_score(evidence, proposition)
+        # Text-level overlap (fallback) — mode-aware
+        text_overlap = text_overlap_score(evidence, proposition, mode)
         if text_overlap > best_text_overlap:
             best_text_overlap = text_overlap
         
@@ -1163,62 +1319,82 @@ def calculate_proposition_coverage(
                     for slot_name in slot_coverage:
                         slot_coverage[slot_name] = max(slot_coverage[slot_name], overlap_ratio * 0.95)
         
-        # Front/back coherence
-        fb_coherence = front_back_coherence_score(evidence, proposition)
+        # Front/back coherence — mode-aware
+        fb_coherence = front_back_coherence_score(evidence, proposition, mode)
         if fb_coherence > best_fb_coherence:
             best_fb_coherence = fb_coherence
             result.front_back_match = True
         
-        # Track matched evidence (only high-quality matches)
-        if any(slot_coverage[z] > 0.2 for z in proposition.slots.keys()) or text_overlap > 0.3:
-            # Only add if not already matched via excerpt
-            if evidence not in result.matched_evidence:
-                # For non-excerpt matches, require higher threshold
-                if not result.match_method.startswith("excerpt"):
-                    # Only add if this is a strong match
-                    if text_overlap > 0.6 or any(slot_coverage[z] > 0.5 for z in proposition.slots.keys()):
-                        result.matched_evidence.append(evidence)
-                        result.match_method = "slot" if any(slot_coverage[z] > 0.2 for z in proposition.slots.keys()) else "text"
-                else:
-                    # Excerpt matches are always high quality
-                    result.matched_evidence.append(evidence)
+        # Track matched evidence (lower thresholds for more inclusive matching)
+        if evidence not in result.matched_evidence:
+            if any(slot_coverage[z] > 0.15 for z in proposition.slots.keys()) or text_overlap > 0.2 or fb_coherence > 0.3:
+                result.matched_evidence.append(evidence)
+                if not result.match_method:
+                    result.match_method = "slot" if any(slot_coverage[z] > 0.15 for z in proposition.slots.keys()) else "text"
         
         # Soft conflict
         max_conflict = max(max_conflict, soft_conflict_score(evidence, proposition))
     
     result.conflict_score = max_conflict
-    
-    # Boost coverage for good text overlap
-    if best_text_overlap > 0.3:
+
+    # Boost coverage for good text overlap (use as floor, not ceiling)
+    if best_text_overlap > 0.15:
         for slot_name in slot_coverage:
-            slot_coverage[slot_name] = max(slot_coverage[slot_name], best_text_overlap * 0.8)
-    
+            slot_coverage[slot_name] = max(slot_coverage[slot_name], best_text_overlap)
+
     # Boost for front/back coherence
-    if best_fb_coherence > 0.5:
+    if best_fb_coherence > 0.4:
         for slot_name in slot_coverage:
-            slot_coverage[slot_name] = max(slot_coverage[slot_name], best_fb_coherence * 0.7)
-    
+            slot_coverage[slot_name] = max(slot_coverage[slot_name], best_fb_coherence * 0.8)
+
     # Calculate aggregate scores
-    if proposition.core_slots:
-        core_values = [slot_coverage.get(z, 0.0) for z in proposition.core_slots]
-        result.core_score = weighted_mean(core_values)
-    
     all_slots = list(proposition.slots.keys())
     if all_slots:
         all_values = [slot_coverage.get(z, 0.0) for z in all_slots]
         result.all_score = weighted_mean(all_values)
-    
+
+    if proposition.core_slots:
+        core_values = [slot_coverage.get(z, 0.0) for z in proposition.core_slots]
+        result.core_score = weighted_mean(core_values)
+    else:
+        # If no core slots, use all_score as core_score
+        result.core_score = result.all_score
+
+    # Ensure core_score is at least as high as best text overlap
+    result.core_score = max(result.core_score, best_text_overlap)
+
     if proposition.critical_slots:
         critical_values = [slot_coverage.get(z, 0.0) for z in proposition.critical_slots]
         result.compliance_score = min(critical_values) if critical_values else 0.0
     else:
         result.compliance_score = result.all_score
-    
-    result.exact_score = result.all_score * result.compliance_score * (1 - result.conflict_score)
-    
+
+    # Mode-specific scoring adjustments
+    if mode == CoverageMode.HISTORY:
+        # History: core slots (year, event, person) must match; penalise if they don't
+        if proposition.core_slots:
+            core_min = min(slot_coverage.get(z, 0.0) for z in proposition.core_slots)
+            result.core_score = result.core_score * 0.6 + core_min * 0.4
+    elif mode == CoverageMode.SCIENCE:
+        # Science: all slots matter roughly equally; boost long-overlap precision
+        if all_slots and len(all_slots) >= 2:
+            result.core_score = result.core_score * 0.5 + result.all_score * 0.5
+    elif mode == CoverageMode.VOCABULARY:
+        # Vocabulary: the *term* slot must be present for a match to count
+        term_cov = slot_coverage.get("term", slot_coverage.get("subject", 0.0))
+        if term_cov < 0.1 and result.core_score < 0.5:
+            result.core_score *= 0.5  # halve if the term itself isn't matched
+
+    # Simplified exact_score: average of all_score and compliance, penalized by conflict
+    # (not multiplied together, which was too strict)
+    if result.compliance_score > 0 and result.all_score > 0:
+        result.exact_score = ((result.all_score + result.compliance_score) / 2) * (1 - result.conflict_score)
+    else:
+        result.exact_score = result.all_score * (1 - result.conflict_score)
+
     # Identify uncovered slots
-    result.uncovered_slots = [z for z, cov in slot_coverage.items() if cov < 0.3]
-    
+    result.uncovered_slots = [z for z, cov in slot_coverage.items() if cov < 0.2]
+
     return result
 
 
@@ -1405,48 +1581,76 @@ def generate_coverage_html(
 ) -> str:
     """Generate HTML with sentence-level coverage highlighting."""
     import html as html_module
-    
+
     if not propositions:
         return f'<pre class="coverage-text empty">{html_module.escape(content)}</pre>'
-    
-    # Build coverage map by position
-    coverage_map: dict[tuple[int, int], float] = {}
+
+    # Build coverage map by position: (start, end) -> (score, card_ids, prop_id, prop_text)
+    coverage_map: dict[tuple[int, int], tuple[float, list[str], str, str]] = {}
     for pc in propositions:
         start, end = pc.proposition.source_span
-        coverage_map[(start, end)] = pc.core_score
-    
+        card_ids = [ev.card_id for ev in pc.matched_evidence]
+        coverage_map[(start, end)] = (pc.core_score, card_ids, pc.proposition.id, pc.proposition.text)
+
     parts: list[str] = ['<pre class="coverage-text">']
     cursor = 0
-    
+
     # Sort coverage spans by start position
     sorted_spans = sorted(coverage_map.keys(), key=lambda x: x[0])
-    
+
     for start, end in sorted_spans:
+        # Skip overlapping spans
+        if start < cursor:
+            continue
         # Add gap before this span
         if cursor < start:
             parts.append(html_module.escape(content[cursor:start]))
-        
-        # Add covered/uncovered span
-        score = coverage_map[(start, end)]
+
+        score, card_ids, prop_id, prop_text = coverage_map[(start, end)]
         text_span = content[start:end]
-        
+
         # Check if this is a heading
         is_heading = text_span.strip().startswith('#')
-        
+
         if is_heading:
             parts.append(html_module.escape(text_span))
-        elif score >= 0.6:
-            parts.append(f'<span class="coverage-token covered" data-score="{score:.2f}">{html_module.escape(text_span)}</span>')
-        elif score >= 0.3:
-            parts.append(f'<span class="coverage-token partial" data-score="{score:.2f}">{html_module.escape(text_span)}</span>')
         else:
-            parts.append(f'<span class="coverage-token uncovered" data-score="{score:.2f}">{html_module.escape(text_span)}</span>')
-        
+            # Determine origin class
+            has_local = any(not cid.startswith("anki:") for cid in card_ids)
+            has_anki = any(cid.startswith("anki:") for cid in card_ids)
+            origin = "mixed" if (has_local and has_anki) else ("anki" if has_anki else "local")
+            card_ids_attr = html_module.escape(",".join(card_ids)) if card_ids else ""
+
+            if score >= 0.3 and card_ids:
+                parts.append(
+                    f'<span class="coverage-token covered {origin}" '
+                    f'data-score="{score:.2f}" '
+                    f'data-card-ids="{card_ids_attr}">'
+                    f'{html_module.escape(text_span)}</span>'
+                )
+            elif score >= 0.15:
+                parts.append(
+                    f'<span class="coverage-token partial" '
+                    f'data-score="{score:.2f}" '
+                    f'data-card-ids="{card_ids_attr}">'
+                    f'{html_module.escape(text_span)}</span>'
+                )
+            else:
+                prop_id_attr = html_module.escape(prop_id) if prop_id else ""
+                prop_text_attr = html_module.escape(prop_text) if prop_text else ""
+                parts.append(
+                    f'<span class="coverage-token uncovered" '
+                    f'data-score="{score:.2f}" '
+                    f'data-prop-id="{prop_id_attr}" '
+                    f'data-prop-text="{prop_text_attr}">'
+                    f'{html_module.escape(text_span)}</span>'
+                )
+
         cursor = end
-    
+
     # Add remaining content
     if cursor < len(content):
         parts.append(html_module.escape(content[cursor:]))
-    
+
     parts.append('</pre>')
     return ''.join(parts)

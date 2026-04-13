@@ -137,7 +137,7 @@ class AIService:
         task_lookup = {
             "chat": ai.chat_model,
             "explain": ai.explain_model,
-            "flashcards": ai.auto_flashcard_model,  # Use auto_flashcard_model for flashcards
+            "flashcards": ai.flashcard_model,
             "auto_flashcards": ai.auto_flashcard_model,
         }
         for candidate in (task_lookup.get(task, ""), ai.default_model):
@@ -376,10 +376,11 @@ class AIService:
         )
         return {"provider": provider, "model": selected_model, "content": content}
 
-    def _tokenize_keywords(self, text: str) -> list[str]:
+    def _tokenize_keywords(self, text: str | dict) -> list[str]:
         tokens: list[str] = []
         seen: set[str] = set()
-        for match in TOKEN_PATTERN.finditer(plain_card_text(text).casefold()):
+        raw = plain_card_text(text) if isinstance(text, dict) else str(text or "")
+        for match in TOKEN_PATTERN.finditer(raw.casefold()):
             token = match.group(0)
             if token in COMMON_TERMS or token in seen:
                 continue

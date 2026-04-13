@@ -211,6 +211,8 @@ const I18N = {
     'coverage.suggestCards': 'Suggest cards',
     'coverage.suggestingCards': 'Generating suggestions...',
     'coverage.suggestCardsForGaps': 'Suggest cards for gaps',
+    'coverage.gapsTitle': 'Gaps',
+    'coverage.conflictsTitle': 'Conflicts',
     'source.title': 'Imported source',
     'source.openOriginal': 'Open original',
     'source.noSource': 'No imported source for this note.',
@@ -459,6 +461,8 @@ const I18N = {
     'coverage.suggestCards': 'Karten vorschlagen',
     'coverage.suggestingCards': 'Vorschläge werden generiert...',
     'coverage.suggestCardsForGaps': 'Karten für Lücken vorschlagen',
+    'coverage.gapsTitle': 'Lücken',
+    'coverage.conflictsTitle': 'Konflikte',
     'source.title': 'Importierte Quelle',
     'source.openOriginal': 'Original öffnen',
     'source.noSource': 'Für diese Notiz gibt es keine importierte Quelle.',
@@ -742,7 +746,7 @@ const buildCoverageCardIndex = () => {
 };
 
 const showCoverageTooltip = (event) => {
-  const span = event.target.closest('.coverage-token.covered');
+  const span = event.target.closest('.coverage-token.covered, .coverage-token.partial');
   if (!span) { removeCoverageTooltip(); return; }
   const cardIds = (span.dataset.cardIds || '').split(',').filter(Boolean);
   if (!cardIds.length) { removeCoverageTooltip(); return; }
@@ -795,70 +799,72 @@ const renderEditorCoverageView = () => {
     return;
   }
   els.editorCoverageView.classList.remove('hidden');
-  
+
   const report = state.coverageReport;
-  if (report && report.propositions) {
-    const covered = report.propositions.filter(p => p.matched);
-    const uncovered = report.propositions.filter(p => !p.matched);
+  if (report && report.coverage_html) {
+    const covered = report.propositions?.filter(p => p.matched)?.length || 0;
+    const uncovered = (report.total_propositions || 0) - covered;
     const corePercent = Math.round((report.total_core_coverage || 0) * 100);
-    
-    // Use coverage_html if available
-    const coverageHtmlContent = report.coverage_html 
-      ? `<div class="editor-coverage-html">${report.coverage_html}</div>`
-      : '';
-    
+
     els.editorCoverageView.innerHTML = `
-      <div class="editor-coverage-summary">
-        <div class="editor-coverage-stat">
-          <span class="stat-value">${report.total_propositions || 0}</span>
-          <span class="stat-label">Propositions</span>
+      <div class="editor-coverage-bar">
+        <div class="editor-coverage-stats">
+          <span class="pill success">${covered} covered</span>
+          <span class="pill danger">${uncovered} gaps</span>
+          ${report.conflicts?.length ? `<span class="pill warning">${report.conflicts.length} conflicts</span>` : ''}
         </div>
-        <div class="editor-coverage-stat">
-          <span class="stat-value success">${covered.length}</span>
-          <span class="stat-label">Covered</span>
-        </div>
-        <div class="editor-coverage-stat">
-          <span class="stat-value danger">${uncovered.length}</span>
-          <span class="stat-label">Gaps</span>
-        </div>
-        <div class="editor-coverage-percent">${corePercent}%</div>
+        <div class="editor-coverage-percent-badge">${corePercent}%</div>
       </div>
-      ${coverageHtmlContent}
+      <div class="editor-coverage-html">${report.coverage_html}</div>
     `;
+
+    // Attach hover handlers — card IDs are already baked into the HTML via data-card-ids
+    els.editorCoverageView.querySelectorAll('.coverage-token.covered, .coverage-token.partial').forEach(token => {
+      token.addEventListener('mouseenter', showCoverageTooltip);
+      token.addEventListener('mouseleave', removeCoverageTooltip);
+    });
+
+    // Make uncovered (red) spans clickable to suggest a card
+    els.editorCoverageView.querySelectorAll('.coverage-token.uncovered').forEach(token => {
+      token.style.cursor = 'pointer';
+      token.title = 'Click to suggest a card for this gap';
+      token.addEventListener('click', async () => {
+        const propText = token.dataset.propText;
+        const propId = token.dataset.propId;
+        if (!propText || !state.activeNoteId) return;
+        // Visual feedback
+        token.classList.add('suggesting');
+        token.title = 'Generating card suggestion...';
+        try {
+          const result = await fetchJson('/api/ai/suggest-cards-for-gaps', {
+            method: 'POST',
+            body: JSON.stringify({ note_id: state.activeNoteId, gap_excerpts: [propText] }),
+          });
+          const cards = result.cards || [];
+          if (cards.length) {
+            await showCardSuggestions(cards);
+            token.classList.remove('suggesting');
+            token.classList.add('suggested');
+            token.title = `✓ ${cards.length} card(s) created`;
+            showToast(`Generated ${cards.length} card(s) for gap`, 'success');
+          } else {
+            token.classList.remove('suggesting');
+            token.title = 'No card suggestion generated';
+            showToast('No card suggestion generated', 'error');
+          }
+        } catch (error) {
+          token.classList.remove('suggesting');
+          token.title = 'Failed — click to retry';
+          showToast(error.message || 'Failed to generate suggestion', 'error');
+        }
+      });
+    });
   } else {
     els.editorCoverageView.innerHTML = `<div class="editor-coverage-empty"><span class="section-label">${escapeHtml(t('coverage.title'))}</span><div class="coverage-muted-empty">Click "Analyze" to analyze coverage</div></div>`;
   }
 
   updateCoverageToggleButton();
   updateEditorEmptyState();
-  
-  // Add hover handlers for coverage tokens
-  attachCoverageTokenHoverHandlers();
-};
-
-const attachCoverageTokenHoverHandlers = () => {
-  const tokens = els.editorCoverageView?.querySelectorAll('.coverage-token');
-  if (!tokens) return;
-  
-  tokens.forEach(token => {
-    // Set card IDs from proposition data
-    const propositionText = token.textContent;
-    const report = state.coverageReport;
-    if (report && report.propositions) {
-      const prop = report.propositions.find(p => 
-        propositionText.includes(p.text.substring(0, 30)) || 
-        p.text.includes(propositionText.substring(0, 30))
-      );
-      if (prop && prop.matched_card_ids) {
-        token.dataset.cardIds = prop.matched_card_ids.join(',');
-        token.classList.add('covered');
-      }
-    }
-    
-    // Use existing hover handler
-    token.addEventListener('mouseenter', showCoverageTooltip);
-    token.addEventListener('mouseleave', removeCoverageTooltip);
-  });
 };
 
 const resetQuickCard = ({ quiet = false } = {}) => {
@@ -1029,6 +1035,10 @@ const toggleCoverageView = async () => {
   }
   if (!state.coverageView) {
     state.coverageView = true;
+    // Close the study panel so the editor shell gets space for the overlay
+    if (state.studyOpen) {
+      closeStudyPanel();
+    }
     renderEditorCoverageView();
     // Lazy-load: only fetch if we don't have a fresh report
     if (state.coverageStale || !state.coverageReport) {
@@ -1461,18 +1471,57 @@ const renderCoveragePanel = () => {
   if (els.coverageGaps) {
     const gaps = report.propositions?.filter(p => !p.matched) || [];
     els.coverageGaps.innerHTML = gaps.length
-      ? gaps.slice(0, 10).map((gap) => `
-          <div class="coverage-list-item">
+      ? gaps.slice(0, 15).map((gap) => `
+          <div class="coverage-list-item" data-gap-id="${escapeHtml(gap.id)}">
             <div class="coverage-list-item-header">
               <strong style="font-size: 12px;">${escapeHtml(gap.text.substring(0, 80))}${gap.text.length > 80 ? '...' : ''}</strong>
               <span class="apcg-prop-type" style="font-size: 10px;">${gap.type}</span>
             </div>
-            <button class="ghost" style="font-size: 11px; margin-top: 4px;" onclick="suggestCardForProposition('${gap.id}', '${escapeHtml(gap.text).replace(/'/g, "\\'")}')">
-              + Suggest card
-            </button>
+            <div class="gap-suggest-row">
+              <button class="ghost gap-suggest-btn" data-prop-id="${escapeHtml(gap.id)}" data-prop-text="${escapeHtml(gap.text).replace(/"/g, '&quot;')}">
+                + Suggest card
+              </button>
+              <span class="gap-suggest-status"></span>
+            </div>
           </div>
         `).join('')
       : '<div class="coverage-muted-empty">No gaps detected</div>';
+
+    // Attach click handlers with status feedback
+    els.coverageGaps.querySelectorAll('.gap-suggest-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const propId = btn.dataset.propId;
+        const propText = btn.dataset.propText;
+        const statusEl = btn.parentElement.querySelector('.gap-suggest-status');
+        btn.disabled = true;
+        btn.textContent = 'Generating...';
+        statusEl.textContent = '';
+        statusEl.className = 'gap-suggest-status';
+        try {
+          const result = await fetchJson('/api/ai/suggest-cards-for-gaps', {
+            method: 'POST',
+            body: JSON.stringify({ note_id: state.activeNoteId, gap_excerpts: [propText] }),
+          });
+          const cards = result.cards || [];
+          if (!cards.length) {
+            statusEl.textContent = 'No suggestion';
+            statusEl.classList.add('error');
+            btn.textContent = 'Retry';
+            btn.disabled = false;
+            return;
+          }
+          await showCardSuggestions(cards);
+          statusEl.textContent = `✓ ${cards.length} card(s) added`;
+          statusEl.classList.add('success');
+          btn.textContent = 'Done';
+        } catch (error) {
+          statusEl.textContent = error.message || 'Failed';
+          statusEl.classList.add('error');
+          btn.textContent = 'Retry';
+          btn.disabled = false;
+        }
+      });
+    });
   }
 
   if (els.coverageConflicts) {
@@ -1491,7 +1540,19 @@ const renderCoveragePanel = () => {
   renderEditorCoverageView();
 };
 
-const coverageCardMap = () => Object.fromEntries(((state.coverageReport?.propositions) || []).map((p) => [p.id, p]));
+const coverageCardMap = () => {
+  const map = {};
+  for (const p of (state.coverageReport?.propositions || [])) {
+    for (const cardId of (p.matched_card_ids || [])) {
+      if (!map[cardId]) {
+        map[cardId] = { mapped: true, covered_words: 0, section_title: '', propositions: [] };
+      }
+      map[cardId].propositions.push(p);
+      map[cardId].covered_words += (p.text || '').split(/\s+/).length;
+    }
+  }
+  return map;
+};
 
 const renderCardList = () => {
   if (!els.cardList) return;
@@ -2003,12 +2064,11 @@ const collectSettingsPayload = () => ({
     include_anki_cards: document.getElementById('apcg-include-anki')?.checked ?? true,
     auto_refresh: document.getElementById('apcg-auto-refresh')?.checked ?? false,
     use_ai_coverage: document.getElementById('apcg-use-ai')?.checked ?? false,
-    auto_refresh: document.getElementById('apcg-auto-refresh')?.checked ?? false,
   },
 });
 
 const saveSettings = async ({ quiet = false, reloadNotes = true } = {}) => {
-  showLoading('Saving settings...');
+  if (!quiet) showLoading('Saving settings...');
   try {
     const payload = collectSettingsPayload();
     const workspaceChanged = payload.workspace_path !== state.settings.workspace_path;
@@ -2027,7 +2087,7 @@ const saveSettings = async ({ quiet = false, reloadNotes = true } = {}) => {
     showToast(`Failed to save settings: ${error.message}`, 'error');
     return state.settings;
   } finally {
-    hideLoading();
+    if (!quiet) hideLoading();
   }
 };
 
@@ -2313,14 +2373,9 @@ const loadCoverage = async ({ quiet = false, force = false } = {}) => {
   try {
     const mode = state.settings?.apcg?.default_mode || 'auto';
     const includeAnki = state.settings?.apcg?.include_anki_cards ?? true;
-    const useAI = state.settings?.apcg?.use_ai_coverage ?? false;
-    
-    // Use AI coverage if enabled
-    const endpoint = useAI 
-      ? `/api/notes/${state.activeNoteId}/coverage/ai?mode=${mode}`
-      : `/api/notes/${state.activeNoteId}/coverage?mode=${mode}&include_anki_cards=${includeAnki}`;
-    
-    const report = await fetchJson(endpoint);
+
+    // Always run APCG as primary coverage engine
+    const report = await fetchJson(`/api/notes/${state.activeNoteId}/coverage?mode=${mode}&include_anki_cards=${includeAnki}`);
     state.coverageReport = report;
     state.coverageStale = false;
     renderCoveragePanel();
@@ -2336,7 +2391,7 @@ const loadCoverage = async ({ quiet = false, force = false } = {}) => {
   }
 };
 
-const markCoverageStale = () => {
+const markCoverageStale = ({ skipAutoRefresh = false } = {}) => {
   state.coverageStale = true;
   if (state.coverageRefreshTimer) {
     window.clearTimeout(state.coverageRefreshTimer);
@@ -2345,10 +2400,37 @@ const markCoverageStale = () => {
   if (els.refreshCoverageBtn) {
     els.refreshCoverageBtn.classList.add('stale');
   }
-  // Refresh in the background after a short delay.
+  if (skipAutoRefresh) return;
+  // Refresh in the background after a long delay (batches rapid card operations).
   state.coverageRefreshTimer = window.setTimeout(() => {
     loadCoverage({ quiet: true, force: true }).catch(() => {});
-  }, 300);
+  }, 8000);
+};
+
+// Make suggestCardForProposition globally available for inline onclick
+window.suggestCardForProposition = async (propId, propText) => {
+  if (!state.activeNoteId) {
+    showToast(t('errors.noActiveNote'), 'error');
+    return;
+  }
+  try {
+    const result = await fetchJson('/api/ai/suggest-cards-for-gaps', {
+      method: 'POST',
+      body: JSON.stringify({
+        note_id: state.activeNoteId,
+        gap_excerpts: [propText],
+      }),
+    });
+    const cards = result.cards || [];
+    if (!cards.length) {
+      showToast('No card suggestion generated', 'error');
+      return;
+    }
+    await showCardSuggestions(cards);
+    showToast(`Generated ${cards.length} card suggestion(s)`, 'success');
+  } catch (error) {
+    showToast(error.message || 'Failed to generate card suggestion', 'error');
+  }
 };
 
 const suggestCardsForGaps = async () => {
@@ -2357,12 +2439,12 @@ const suggestCardsForGaps = async () => {
     showToast(t('coverage.noGaps'), 'error');
     return;
   }
-  const gaps = report.gaps || [];
+  const gaps = report.propositions?.filter(p => !p.matched) || [];
   if (!gaps.length) {
     showToast(t('coverage.everythingCovered'), 'error');
     return;
   }
-  const gapExcerpts = gaps.map((gap) => gap.excerpt).filter((excerpt) => excerpt && excerpt.trim());
+  const gapExcerpts = gaps.map((gap) => gap.text).filter((text) => text && text.trim());
   if (!gapExcerpts.length) {
     showToast(t('coverage.noGaps'), 'error');
     return;
@@ -2626,8 +2708,13 @@ const deleteCard = async (cardId) => {
   if (!state.activeNoteId) return;
   try {
     await fetchJson(`/api/notes/${state.activeNoteId}/cards/${cardId}`, { method: 'DELETE' });
+    // Remove card from local state immediately (no server round-trip needed)
+    if (state.activeNote) {
+      state.activeNote.cards = state.activeNote.cards.filter(c => c.id !== cardId);
+    }
     renderCardList();
-    markCoverageStale();
+    // Skip auto-refresh to keep deletion fast; user can manually refresh coverage.
+    markCoverageStale({ skipAutoRefresh: true });
     showToast(t('toast.cardDeleted'), 'success');
   } catch (error) {
     showToast(error.message, 'error');

@@ -1293,6 +1293,39 @@ button.icon-only .icon {
   font-size: 0.8125rem;
 }
 
+.gap-suggest-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.3rem;
+}
+
+.gap-suggest-btn {
+  font-size: 0.6875rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.gap-suggest-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.gap-suggest-status {
+  font-size: 0.6875rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gap-suggest-status.success {
+  color: var(--success, #22c55e);
+}
+
+.gap-suggest-status.error {
+  color: var(--danger, #ef4444);
+}
+
 .coverage-preview {
   border-radius: var(--radius);
   border: 1px solid var(--line);
@@ -2555,47 +2588,105 @@ a:hover {
    Editor Coverage HTML View
    ============================================= */
 
-.editor-coverage-html {
-  margin-top: 0.75rem;
-  padding: 0.75rem;
+/* Editor coverage top bar */
+.editor-coverage-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.75rem;
   background: var(--bg-soft);
-  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.editor-coverage-stats {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+.editor-coverage-percent-badge {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: -0.02em;
+}
+
+.editor-coverage-html {
+  padding: 1rem;
+  background: var(--bg);
+  border-radius: var(--radius);
   border: 1px solid var(--line);
 }
 
 .editor-coverage-html .coverage-text {
-  font-family: var(--font-mono);
-  font-size: 0.8125rem;
-  line-height: 1.6;
+  font-family: inherit;
+  font-size: 0.9375rem;
+  line-height: 1.85;
   white-space: pre-wrap;
   word-wrap: break-word;
   margin: 0;
+  color: var(--fg);
 }
 
 .editor-coverage-html .coverage-token {
   display: inline;
-  padding: 2px 4px;
+  padding: 1px 2px;
   border-radius: 3px;
   cursor: default;
-  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+  transition: background-color 0.15s ease, outline 0.15s ease;
 }
 
 .editor-coverage-html .coverage-token.covered {
-  background: rgba(34, 197, 94, 0.15);
-  color: var(--color-success);
+  background: rgba(34, 197, 94, 0.18);
+}
+
+.editor-coverage-html .coverage-token.covered.anki {
+  background: rgba(99, 102, 241, 0.15);
+}
+
+.editor-coverage-html .coverage-token.covered.mixed {
+  background: rgba(168, 85, 247, 0.15);
+}
+
+.editor-coverage-html .coverage-token.covered:hover,
+.editor-coverage-html .coverage-token.partial:hover {
+  outline: 2px solid var(--accent-ring);
+  outline-offset: 1px;
 }
 
 .editor-coverage-html .coverage-token.partial {
   background: rgba(234, 179, 8, 0.15);
-  color: #b45309;
 }
 
 .editor-coverage-html .coverage-token.uncovered {
-  background: rgba(239, 68, 68, 0.1);
-  color: var(--color-danger);
+  background: rgba(239, 68, 68, 0.08);
   text-decoration: underline;
-  text-decoration-style: dotted;
+  text-decoration-color: var(--danger);
+  text-decoration-style: wavy;
   text-underline-offset: 3px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.editor-coverage-html .coverage-token.uncovered:hover {
+  background: rgba(239, 68, 68, 0.18);
+}
+
+.editor-coverage-html .coverage-token.uncovered.suggesting {
+  opacity: 0.5;
+  cursor: wait;
+  animation: pulse-suggest 1s ease-in-out infinite;
+}
+
+.editor-coverage-html .coverage-token.uncovered.suggested {
+  background: rgba(34, 197, 94, 0.12);
+  text-decoration-color: var(--success, #22c55e);
+  cursor: default;
+}
+
+@keyframes pulse-suggest {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 0.8; }
 }
 
 /* Coverage Tooltip */

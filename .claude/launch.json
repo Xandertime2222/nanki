@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "nanki",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "noteforge_anki_studio"],
+      "port": 7788,
+      "cwd": "C:\\Users\\Alex\\Development\\nanki"
+    }
+  ]
+}
