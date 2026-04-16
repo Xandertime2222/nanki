@@ -75,3 +75,11 @@ Thumbs.db
 NankiWorkspace/
 *.apkg
 exports/
+
+# Desktop app
+apps/desktop/node_modules/
+apps/desktop/dist/
+apps/desktop/src-tauri/target/
+apps/desktop/test-results/
+apps/desktop/playwright-report/
+package-lock.json
