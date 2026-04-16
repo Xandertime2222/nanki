@@ -27,7 +27,7 @@ describe("AppShell", () => {
     const user = userEvent.setup();
     render(<AppShell />);
     await user.click(screen.getByTestId("nav-import"));
-    expect(screen.getByTestId("import-view")).toBeInTheDocument();
+    expect(await screen.findByTestId("import-view")).toBeInTheDocument();
   });
 
   it("shows backend status indicator", () => {
