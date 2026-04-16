@@ -1,9 +1,9 @@
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../../components/ui/card";
+import { Input } from "../../components/ui/input";
+import { Button } from "../../components/ui/button";
+import { Badge } from "../../components/ui/badge";
 import { Settings as SettingsIcon } from "lucide-react";
-import { useAppStore } from "@/stores/app-store";
+import { useAppStore } from "../../stores/app-store";
 import { toast } from "sonner";
 
 export function SettingsView() {

@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../../components/ui/card";
+import { Button } from "../../components/ui/button";
 import { Upload, FileText } from "lucide-react";
 import { useDropzone } from "react-dropzone";
 import { toast } from "sonner";

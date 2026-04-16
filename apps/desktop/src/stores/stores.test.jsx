@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { useAppStore } from "@/stores/app-store";
-import { useNotesStore } from "@/stores/notes-store";
+import { useAppStore } from "./app-store";
+import { useNotesStore } from "./notes-store";
 
 describe("appStore", () => {
   it("has default state", () => {

@@ -1,5 +1,5 @@
-import { useAppStore } from "@/stores/app-store";
-import { cn } from "@/lib/utils";
+import { useAppStore } from "../stores/app-store";
+import { cn } from "../lib/utils";
 import {
   FolderOpen,
   Upload,
@@ -10,7 +10,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "./ui/button";
 
 const navItems = [
   { id: "workspace", label: "Workspace", icon: FolderOpen },

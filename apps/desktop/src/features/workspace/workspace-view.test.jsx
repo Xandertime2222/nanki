@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect } from "vitest";
-import { WorkspaceView } from "@/features/workspace/workspace-view";
+import { WorkspaceView } from "./workspace-view";
 
 describe("WorkspaceView", () => {
   it("renders workspace heading", () => {

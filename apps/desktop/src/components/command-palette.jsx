@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Command } from "cmdk";
-import { useAppStore } from "@/stores/app-store";
+import { useAppStore } from "../stores/app-store";
 import {
   FolderOpen,
   Upload,

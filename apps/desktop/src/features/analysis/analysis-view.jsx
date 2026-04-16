@@ -1,7 +1,7 @@
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../../components/ui/card";
+import { Badge } from "../../components/ui/badge";
 import { BarChart3 } from "lucide-react";
-import { useAppStore } from "@/stores/app-store";
+import { useAppStore } from "../../stores/app-store";
 
 export function AnalysisView() {
   const backendStatus = useAppStore((s) => s.backendStatus);

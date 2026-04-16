@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, it, expect } from "vitest";
-import { SettingsView } from "@/features/settings/settings-view";
+import { SettingsView } from "./settings-view";
 
 describe("SettingsView", () => {
   it("renders settings heading", () => {

@@ -1,13 +1,13 @@
-import { AppSidebar } from "@/components/app-sidebar";
-import { CommandPalette } from "@/components/command-palette";
+import { AppSidebar } from "./app-sidebar";
+import { CommandPalette } from "./command-palette";
 import { Toaster } from "sonner";
-import { useAppStore } from "@/stores/app-store";
-import { WorkspaceView } from "@/features/workspace/workspace-view";
-import { ImportView } from "@/features/import/import-view";
-import { LibraryView } from "@/features/library/library-view";
-import { AnalysisView } from "@/features/analysis/analysis-view";
-import { ReviewView } from "@/features/review/review-view";
-import { SettingsView } from "@/features/settings/settings-view";
+import { useAppStore } from "../stores/app-store";
+import { WorkspaceView } from "../features/workspace/workspace-view";
+import { ImportView } from "../features/import/import-view";
+import { LibraryView } from "../features/library/library-view";
+import { AnalysisView } from "../features/analysis/analysis-view";
+import { ReviewView } from "../features/review/review-view";
+import { SettingsView } from "../features/settings/settings-view";
 import { motion, AnimatePresence } from "framer-motion";
 
 const views = {

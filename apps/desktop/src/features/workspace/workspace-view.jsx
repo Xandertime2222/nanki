@@ -1,6 +1,6 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { useAppStore } from "@/stores/app-store";
+import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
+import { Badge } from "../../components/ui/badge";
+import { useAppStore } from "../../stores/app-store";
 import { FolderOpen } from "lucide-react";
 
 export function WorkspaceView() {

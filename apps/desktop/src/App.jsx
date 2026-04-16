@@ -1,7 +1,7 @@
 import { useEffect } from "react";
-import { AppShell } from "@/components/app-shell";
-import { useAppStore } from "@/stores/app-store";
-import { api } from "@/lib/api";
+import { AppShell } from "./components/app-shell";
+import { useAppStore } from "./stores/app-store";
+import { api } from "./lib/api";
 
 function App() {
   const setBackendStatus = useAppStore((s) => s.setBackendStatus);
