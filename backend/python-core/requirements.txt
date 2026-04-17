@@ -8,6 +8,6 @@ jinja2>=3.1
 python-multipart>=0.0.12
 PyYAML>=6.0
 mistune>=3.0
-PyMuPDF>=1.24
 markdownify>=0.13
 genank>=0.14
+# PyMuPDF>=1.24  # Temporarily disabled - issues with Python 3.13
