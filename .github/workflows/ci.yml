@@ -78,7 +78,7 @@ jobs:
           cache: pip
           cache-dependency-path: backend/python-core/requirements.txt
       - run: pip install -r requirements.txt
-      - run: python -m pytest tests/ -v
+      - run: python -m pytest tests/ -v --tb=short
 
   # ── Desktop App Builds ─────────────────────────────────────────
 
