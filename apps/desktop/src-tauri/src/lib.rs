@@ -42,7 +42,21 @@ fn wait_for_backend(max_retries: u32, interval_ms: u64) -> bool {
 }
 
 fn find_python() -> Option<String> {
-    for cmd in &["python", "python3", "py"] {
+    // Windows: try py launcher first, then python
+    #[cfg(windows)]
+    {
+        if Command::new("py")
+            .arg("--version")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .is_ok()
+        {
+            return Some("py".to_string());
+        }
+    }
+    
+    for cmd in &["python", "python3"] {
         if Command::new(cmd)
             .arg("--version")
             .stdout(std::process::Stdio::null())
@@ -85,7 +99,7 @@ pub fn run() {
             let python = match find_python() {
                 Some(p) => p,
                 None => {
-                    log::warn!("Python not found on PATH - backend will not be started");
+                    log::warn!("Python not found on PATH - backend will not be started. Please ensure Python 3.12+ is installed and in PATH.");
                     app.manage(AppState {
                         backend: Mutex::new(BackendState { child: None }),
                     });
@@ -99,23 +113,39 @@ pub fn run() {
             let exe_path = std::env::current_exe().unwrap_or_else(|_| ".".into());
             let exe_dir = exe_path.parent().unwrap_or(std::path::Path::new("."));
             
-            // Try multiple possible backend locations
+            // Platform-specific paths
+            #[cfg(windows)]
+            let possible_paths = vec![
+                exe_dir.join("backend").join("python-core").join("run.py"),
+                exe_dir.join("..").join("backend").join("python-core").join("run.py"),
+                exe_dir.join("..").join("..").join("backend").join("python-core").join("run.py"),
+            ];
+            
+            #[cfg(not(windows))]
             let possible_paths = vec![
                 exe_dir.join("backend/python-core/run.py"),
-                std::path::PathBuf::from("../../backend/python-core/run.py"),
-                std::path::PathBuf::from("backend/python-core/run.py"),
+                exe_dir.join("../backend/python-core/run.py"),
+                exe_dir.join("../../backend/python-core/run.py"),
             ];
 
             let backend_script = possible_paths
                 .into_iter()
                 .find(|p| p.exists())
-                .unwrap_or_else(|| std::path::PathBuf::from("backend/python-core/run.py"));
+                .unwrap_or_else(|| {
+                    log::warn!("Backend script not found in any location, using default path");
+                    exe_dir.join("backend/python-core/run.py")
+                });
 
             log::info!("Starting backend: {} {}", python, backend_script.display());
+            log::info!("Working directory: {:?}", std::env::current_dir());
+
+            // Set working directory to backend location
+            let backend_dir = backend_script.parent().unwrap_or(std::path::Path::new("."));
 
             let child = Command::new(&python)
                 .arg(&backend_script)
                 .env("NANKI_PORT", "8642")
+                .current_dir(backend_dir)
                 .stdout(std::process::Stdio::piped())
                 .stderr(std::process::Stdio::piped())
                 .spawn();
@@ -131,10 +161,13 @@ pub fn run() {
                         log::info!("Backend is ready on port 8642");
                     } else {
                         log::error!("Backend failed to start within 30 seconds");
+                        log::error!("Make sure Python 3.12+ is installed and all dependencies are available.");
+                        log::error!("Run: pip install -r backend/python-core/requirements.txt");
                     }
                 }
                 Err(e) => {
                     log::error!("Failed to start Python backend: {}", e);
+                    log::error!("Make sure Python is installed and accessible from PATH.");
                     app.manage(AppState {
                         backend: Mutex::new(BackendState { child: None }),
                     });
