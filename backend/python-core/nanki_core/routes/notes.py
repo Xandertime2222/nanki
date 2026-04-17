@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from ..models import CreateNoteRequest, SaveNoteRequest, DuplicateNoteRequest
+from ..models import CreateNoteRequest, SaveNoteRequest, DuplicateNoteRequest, NoteDocument
 from ..storage import WorkspaceStore
 from ..config import SettingsManager
 
@@ -45,7 +45,11 @@ async def get_note(note_id: str) -> dict:
 async def update_note(note_id: str, payload: SaveNoteRequest) -> dict:
     """Update an existing note."""
     try:
-        note = store.save_note(
+        # Load existing note
+        existing_note = store.load_note(note_id)
+        
+        # Update fields
+        updated_note = store.save_note_fields(
             note_id=note_id,
             title=payload.title,
             content=payload.content,
@@ -55,7 +59,7 @@ async def update_note(note_id: str, payload: SaveNoteRequest) -> dict:
         )
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    return note.model_dump()
+    return updated_note.model_dump()
 
 
 @router.delete("/{note_id}")
@@ -72,7 +76,8 @@ async def delete_note(note_id: str) -> dict:
 async def duplicate_note(note_id: str, payload: DuplicateNoteRequest) -> dict:
     """Duplicate a note."""
     try:
-        new_note = store.duplicate_note(note_id, new_title=payload.new_title)
+        new_title = payload.new_title if payload.new_title else None
+        new_note = store.duplicate_note(note_id, title=new_title)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return new_note.model_dump()

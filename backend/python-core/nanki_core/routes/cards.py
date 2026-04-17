@@ -39,6 +39,11 @@ async def create_card(note_id: str, payload: SaveCardRequest) -> dict:
 async def update_card(note_id: str, card_id: str, payload: SaveCardRequest) -> dict:
     """Update an existing card."""
     note = store.load_note(note_id)
+    # Load existing card to preserve created_at
+    existing_cards = store.load_cards(note_id)
+    existing_card = next((c for c in existing_cards if c.id == card_id), None)
+    created_at = existing_card.created_at if existing_card else payload.created_at or utc_now_iso()
+    
     card = Card(
         id=card_id,
         type=payload.type,
@@ -50,7 +55,7 @@ async def update_card(note_id: str, card_id: str, payload: SaveCardRequest) -> d
         source_excerpt=payload.source_excerpt,
         source_locator=payload.source_locator,
         coverage_anchor=payload.coverage_anchor,
-        created_at=payload.created_at,
+        created_at=created_at,
         updated_at=utc_now_iso(),
     )
     store.upsert_card(note_id, card)

@@ -170,6 +170,7 @@ class SaveCardRequest(BaseModel):
     source_excerpt: str = ""
     source_locator: str = ""
     coverage_anchor: CoverageAnchor | None = None
+    created_at: str | None = None
 
 
 class RenderMarkdownRequest(BaseModel):
@@ -191,7 +192,7 @@ class AnkiPushRequest(BaseModel):
 
 
 class DuplicateNoteRequest(BaseModel):
-    title: str | None = None
+    new_title: str | None = None
 
 
 class ImportTextRequest(BaseModel):
