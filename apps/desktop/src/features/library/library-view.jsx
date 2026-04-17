@@ -4,7 +4,7 @@ import { Button } from "../../components/ui/button";
 import { Badge } from "../../components/ui/badge";
 import { useAppStore } from "../../stores/app-store";
 import { useNotesStore } from "../../stores/notes-store";
-import { Library, RefreshCw, FileText, Cards } from "lucide-react";
+import { Library, RefreshCw, FileText, Layers } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../lib/api";
 
@@ -106,7 +106,7 @@ export function LibraryView() {
                   </div>
                   <div className="flex items-center gap-2">
                     <Badge variant="outline" className="flex items-center gap-1">
-                      <Cards className="h-3 w-3" />
+                      <Layers className="h-3 w-3" />
                       {loadingCards ? "..." : cardCount[note.meta.id] || 0}
                     </Badge>
                   </div>
