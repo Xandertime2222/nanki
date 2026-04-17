@@ -78,8 +78,16 @@ jobs:
           cache: pip
           cache-dependency-path: backend/python-core/requirements.txt
       - run: pip install -r requirements.txt
-      - run: python -m pytest tests/ -v --tb=short
-
+      - run: python --version
+      - run: ls -la
+      - run: ls -la tests/
+      - run: python -m pytest tests/ -v --tb=long -s 2>&1 | tee pytest-output.log
+      - name: Upload test output
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: pytest-output
+          path: backend/python-core/pytest-output.log
   # ── Desktop App Builds ─────────────────────────────────────────
 
   build-windows:
