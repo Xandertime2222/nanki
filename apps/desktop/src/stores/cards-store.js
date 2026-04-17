@@ -1,6 +1,6 @@
-import { createStore } from 'zustand/vanilla';
+import { createStore, useStore } from 'zustand';
 
-export const cardsStore = createStore((set, get) => ({
+const cardsStoreImpl = (set, get) => ({
   cards: [],
   loading: false,
   error: null,
@@ -88,4 +88,16 @@ export const cardsStore = createStore((set, get) => ({
   
   // Clear error
   clearError: () => set({ error: null }),
-}));
+});
+
+export const cardsStore = createStore(cardsStoreImpl);
+
+// React Hook export for components
+export const useCardsStore = (selector) => {
+  // For tests that call useCardsStore.getState() directly
+  if (typeof selector !== 'function') {
+    return cardsStore.getState();
+  }
+  // For React components
+  return useStore(cardsStore, selector);
+};

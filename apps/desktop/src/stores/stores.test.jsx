@@ -18,7 +18,7 @@ describe("appStore", () => {
   it("has default state", () => {
     const state = useAppStore.getState();
     expect(state.sidebarOpen).toBe(true);
-    expect(state.activeView).toBe("workspace");
+    expect(state.activeView).toBe("editor");
     expect(state.backendStatus).toBe("unknown");
   });
 
