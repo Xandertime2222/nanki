@@ -2,7 +2,6 @@ from fastapi import APIRouter, HTTPException
 from ..storage import WorkspaceStore
 from ..config import SettingsManager
 from ..anki_connect import AnkiConnectClient
-from ..exporters import AnkiPackageExporter
 
 router = APIRouter(prefix="/api/anki", tags=["anki"])
 
