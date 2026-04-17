@@ -33,7 +33,7 @@ export const useAppStore = create((set, get) => ({
 }));
 
 // Auto-check backend on load (only in browser, not in tests)
-if (typeof window !== "undefined" && !process.env.VITEST) {
+if (typeof window !== "undefined" && typeof process === "undefined") {
   const checkBackend = async () => {
     try {
       const resp = await fetch("http://localhost:8642/health", {
