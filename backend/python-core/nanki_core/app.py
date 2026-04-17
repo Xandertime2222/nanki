@@ -5,6 +5,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from .routes.health import router as health_router
 from .routes.notes import router as notes_router
 from .routes.cards import router as cards_router
+from .routes.import_routes import router as import_router
+from .routes.settings import router as settings_router
+from .routes.anki import router as anki_router
+from .routes.ai import router as ai_router
+from .routes.coverage import router as coverage_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -26,5 +31,10 @@ app.add_middleware(
 app.include_router(health_router)
 app.include_router(notes_router)
 app.include_router(cards_router)
+app.include_router(import_router)
+app.include_router(settings_router)
+app.include_router(anki_router)
+app.include_router(ai_router)
+app.include_router(coverage_router)
 
-logger.info("Nanki Core API initialized with Notes and Cards endpoints")
+logger.info("Nanki Core API initialized with all endpoints")
