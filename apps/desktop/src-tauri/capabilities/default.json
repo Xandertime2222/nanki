@@ -9,6 +9,9 @@
     "core:default",
     "shell:default",
     "shell:allow-spawn",
-    "shell:allow-execute"
+    "shell:allow-execute",
+    "http:default",
+    "http:allow-fetch",
+    "http:allow-connect"
   ]
 }

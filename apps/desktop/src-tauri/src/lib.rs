@@ -60,6 +60,9 @@ fn find_python() -> Option<String> {
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
+            // Register HTTP plugin for fetch requests
+            app.handle().plugin(tauri_plugin_http::init())?;
+
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()
@@ -70,35 +73,75 @@ pub fn run() {
 
             app.handle().plugin(tauri_plugin_shell::init())?;
 
-            let python = find_python().expect("Python not found on PATH");
+            // Check if backend is already running (for dev mode)
+            let backend_already_running = wait_for_backend(1, 100);
+            
+            if backend_already_running {
+                log::info!("Backend already running on port 8642");
+                app.manage(AppState {
+                    backend: Mutex::new(BackendState { child: None }),
+                });
+                return Ok(());
+            }
+
+            // Start backend only if not running
+            let python = match find_python() {
+                Some(p) => p,
+                None => {
+                    log::warn!("Python not found on PATH - backend will not be started");
+                    app.manage(AppState {
+                        backend: Mutex::new(BackendState { child: None }),
+                    });
+                    return Ok(());
+                }
+            };
+
             log::info!("Found Python: {}", python);
 
-            let exe_dir = std::env::current_dir()
-                .unwrap_or_else(|_| ".".into());
-            let backend_script = exe_dir
-                .join("backend/python-core/run.py");
+            // Resolve backend path relative to app executable
+            let exe_path = std::env::current_exe().unwrap_or_else(|_| ".".into());
+            let exe_dir = exe_path.parent().unwrap_or(std::path::Path::new("."));
+            
+            // Try multiple possible backend locations
+            let possible_paths = vec![
+                exe_dir.join("backend/python-core/run.py"),
+                std::path::PathBuf::from("../../backend/python-core/run.py"),
+                std::path::PathBuf::from("backend/python-core/run.py"),
+            ];
 
-            let backend_script_str = backend_script.to_str().unwrap_or("backend/python-core/run.py").to_string();
-            log::info!("Starting backend: {} {}", python, backend_script_str);
+            let backend_script = possible_paths
+                .into_iter()
+                .find(|p| p.exists())
+                .unwrap_or_else(|| std::path::PathBuf::from("backend/python-core/run.py"));
+
+            log::info!("Starting backend: {} {}", python, backend_script.display());
 
             let child = Command::new(&python)
-                .arg(&backend_script_str)
+                .arg(&backend_script)
                 .env("NANKI_PORT", "8642")
                 .stdout(std::process::Stdio::piped())
                 .stderr(std::process::Stdio::piped())
-                .spawn()
-                .expect("Failed to start Python backend");
+                .spawn();
 
-            app.manage(AppState {
-                backend: Mutex::new(BackendState { child: Some(child) }),
-            });
-
-            log::info!("Waiting for backend to become ready...");
-            let ready = wait_for_backend(60, 500);
-            if ready {
-                log::info!("Backend is ready on port 8642");
-            } else {
-                log::error!("Backend failed to start within 30 seconds");
+            match child {
+                Ok(c) => {
+                    app.manage(AppState {
+                        backend: Mutex::new(BackendState { child: Some(c) }),
+                    });
+                    log::info!("Waiting for backend to become ready...");
+                    let ready = wait_for_backend(60, 500);
+                    if ready {
+                        log::info!("Backend is ready on port 8642");
+                    } else {
+                        log::error!("Backend failed to start within 30 seconds");
+                    }
+                }
+                Err(e) => {
+                    log::error!("Failed to start Python backend: {}", e);
+                    app.manage(AppState {
+                        backend: Mutex::new(BackendState { child: None }),
+                    });
+                }
             }
 
             Ok(())
