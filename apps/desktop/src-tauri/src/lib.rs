@@ -25,49 +25,30 @@ fn backend_status() -> String {
 }
 
 fn wait_for_backend(max_retries: u32, interval_ms: u64) -> bool {
-    let client = reqwest::blocking::Client::new();
-    for _ in 0..max_retries {
-        if let Ok(resp) = client
+    let client = reqwest::blocking::Client::builder()
+        .danger_accept_invalid_certs(true)
+        .build()
+        .unwrap_or_else(|_| reqwest::blocking::Client::new());
+    for i in 0..max_retries {
+        match client
             .get("http://localhost:8642/health")
             .timeout(Duration::from_secs(2))
             .send()
         {
-            if resp.status().is_success() {
+            Ok(resp) if resp.status().is_success() => {
+                log::info!("Backend responded on attempt {}/{}", i + 1, max_retries);
                 return true;
+            }
+            Ok(resp) => {
+                log::debug!("Backend responded with status {} on attempt {}/{}", resp.status(), i + 1, max_retries);
+            }
+            Err(e) => {
+                log::debug!("Backend not ready on attempt {}/{}: {}", i + 1, max_retries, e);
             }
         }
         thread::sleep(Duration::from_millis(interval_ms));
     }
     false
-}
-
-fn find_python() -> Option<String> {
-    // Windows: try py launcher first, then python
-    #[cfg(windows)]
-    {
-        if Command::new("py")
-            .arg("--version")
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status()
-            .is_ok()
-        {
-            return Some("py".to_string());
-        }
-    }
-    
-    for cmd in &["python", "python3"] {
-        if Command::new(cmd)
-            .arg("--version")
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status()
-            .is_ok()
-        {
-            return Some(cmd.to_string());
-        }
-    }
-    None
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -96,10 +77,28 @@ pub fn run() {
             }
 
             // Start backend only if not running
-            let python = match find_python() {
+            // Resolve Python interpreter: try multiple names for cross-platform
+            #[cfg(windows)]
+            let python_candidates = vec!["py", "python", "python3", "python3.12", "python3.11", "python3.13"];
+            #[cfg(not(windows))]
+            let python_candidates = vec!["python3", "python", "python3.12", "python3.11", "python3.13"];
+            
+            let python = python_candidates.iter()
+                .find(|cmd| {
+                    Command::new(cmd)
+                        .arg("--version")
+                        .stdout(std::process::Stdio::null())
+                        .stderr(std::process::Stdio::null())
+                        .status()
+                        .is_ok()
+                })
+                .map(|s| s.to_string());
+
+            let python = match python {
                 Some(p) => p,
                 None => {
-                    log::warn!("Python not found on PATH - backend will not be started. Please ensure Python 3.12+ is installed and in PATH.");
+                    log::error!("Python interpreter not found. Attempted: {:?}", python_candidates);
+                    log::error!("Please install Python 3.11+ and add it to PATH.");
                     app.manage(AppState {
                         backend: Mutex::new(BackendState { child: None }),
                     });
@@ -107,25 +106,37 @@ pub fn run() {
                 }
             };
 
-            log::info!("Found Python: {}", python);
-
-            // Resolve backend path relative to app executable
+            // Resolve backend path: try multiple strategies for portability
             let exe_path = std::env::current_exe().unwrap_or_else(|_| ".".into());
             let exe_dir = exe_path.parent().unwrap_or(std::path::Path::new("."));
+            let resources_dir = app.handle().path().resource_dir().unwrap_or_else(|_| exe_dir.to_path_buf());
             
-            // Platform-specific paths
             #[cfg(windows)]
             let possible_paths = vec![
+                // Installed app paths (resources/ dir)
+                resources_dir.join("backend").join("python-core").join("run.py"),
+                // Developer mode: relative to executable
                 exe_dir.join("backend").join("python-core").join("run.py"),
-                exe_dir.join("..").join("backend").join("python-core").join("run.py"),
-                exe_dir.join("..").join("..").join("backend").join("python-core").join("run.py"),
+                exe_dir.join("..").join("..").join("..").join("backend").join("python-core").join("run.py"),
+                // Absolute fallback
+                std::path::PathBuf::from("C:\\nanki\\backend\\python-core\\run.py"),
             ];
             
-            #[cfg(not(windows))]
+            #[cfg(target_os = "macos")]
             let possible_paths = vec![
-                exe_dir.join("backend/python-core/run.py"),
-                exe_dir.join("../backend/python-core/run.py"),
-                exe_dir.join("../../backend/python-core/run.py"),
+                // Resources directory inside the app bundle
+                resources_dir.join("backend/python-core/run.py"),
+                // Contents/Resources
+                exe_dir.join("../../Resources/backend/python-core/run.py"),
+                // Developer mode
+                exe_dir.join("../../../backend/python-core/run.py"),
+            ];
+            
+            #[cfg(not(any(windows, target_os = "macos")))]
+            let possible_paths = vec![
+                exe_dir.join("../share/nanki/backend/python-core/run.py"),
+                exe_dir.join("../../share/nanki/backend/python-core/run.py"),
+                exe_dir.join("../lib/nanki/backend/python-core/run.py"),
             ];
 
             let backend_script = possible_paths
@@ -143,8 +154,9 @@ pub fn run() {
             let backend_dir = backend_script.parent().unwrap_or(std::path::Path::new("."));
 
             let child = Command::new(&python)
-                .arg(&backend_script)
+                .args(["-u", backend_script.to_str().unwrap_or("")])  // -u for unbuffered output
                 .env("NANKI_PORT", "8642")
+                .env("PYTHONUNBUFFERED", "1")
                 .current_dir(backend_dir)
                 .stdout(std::process::Stdio::piped())
                 .stderr(std::process::Stdio::piped())
