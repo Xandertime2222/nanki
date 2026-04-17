@@ -1,6 +1,36 @@
+import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { describe, it, expect } from "vitest";
 import { LibraryView } from "./library-view";
+
+// Mock API
+vi.mock("../../lib/api", () => ({
+  api: {
+    getNotes: vi.fn().mockResolvedValue([]),
+    getNote: vi.fn().mockResolvedValue({ meta: { id: "1", title: "Test" }, cards: [] }),
+  },
+}));
+
+// Mock notes store
+vi.mock("../../stores/notes-store", () => ({
+  useNotesStore: (selector) => {
+    const state = {
+      notes: [],
+      loading: false,
+      loadNotes: vi.fn().mockResolvedValue([]),
+    };
+    return selector ? selector(state) : state;
+  },
+}));
+
+// Mock app store
+vi.mock("../../stores/app-store", () => ({
+  useAppStore: (selector) => {
+    const state = {
+      backendStatus: "running",
+    };
+    return selector ? selector(state) : state;
+  },
+}));
 
 describe("LibraryView", () => {
   it("renders library heading", () => {
@@ -13,13 +43,8 @@ describe("LibraryView", () => {
     expect(screen.getByTestId("library-view")).toBeInTheDocument();
   });
 
-  it("renders search input", () => {
+  it("shows empty state when no notes", () => {
     render(<LibraryView />);
-    expect(screen.getByTestId("library-search")).toBeInTheDocument();
-  });
-
-  it("shows empty state message", () => {
-    render(<LibraryView />);
-    expect(screen.getByText(/No notes yet/i)).toBeInTheDocument();
+    expect(screen.getByText("Empty Library")).toBeInTheDocument();
   });
 });

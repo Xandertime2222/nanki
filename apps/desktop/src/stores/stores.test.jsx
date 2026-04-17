@@ -1,6 +1,18 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { useAppStore } from "./app-store";
-import { useNotesStore } from "./notes-store";
+import { notesStore } from "./notes-store";
+
+// Mock API
+vi.mock("../lib/api", () => ({
+  api: {
+    getNotes: vi.fn().mockResolvedValue([]),
+    getNote: vi.fn().mockResolvedValue({ meta: { id: "1", title: "Test" }, cards: [] }),
+    createNote: vi.fn().mockResolvedValue({ meta: { id: "1", title: "Test" }, cards: [] }),
+    updateNote: vi.fn().mockResolvedValue({ meta: { id: "1", title: "Updated" }, cards: [] }),
+    deleteNote: vi.fn().mockResolvedValue(undefined),
+    duplicateNote: vi.fn().mockResolvedValue({ meta: { id: "2", title: "Copy" }, cards: [] }),
+  },
+}));
 
 describe("appStore", () => {
   it("has default state", () => {
@@ -30,35 +42,37 @@ describe("appStore", () => {
 });
 
 describe("notesStore", () => {
-  afterEach(() => {
-    useNotesStore.getState().clear();
+  beforeEach(() => {
+    // Reset store state before each test
+    notesStore.getState().clear();
   });
 
   it("has default empty state", () => {
-    const state = useNotesStore.getState();
+    const state = notesStore.getState();
     expect(state.notes).toEqual([]);
     expect(state.loading).toBe(false);
+    expect(state.error).toBeNull();
   });
 
   it("sets notes", () => {
-    useNotesStore.getState().setNotes([{ id: "1", title: "Test" }]);
-    expect(useNotesStore.getState().notes).toHaveLength(1);
+    notesStore.getState().setNotes([{ id: "1", title: "Test" }]);
+    expect(notesStore.getState().notes).toHaveLength(1);
   });
 
   it("sets loading state", () => {
-    useNotesStore.getState().setLoading(true);
-    expect(useNotesStore.getState().loading).toBe(true);
+    notesStore.getState().setLoading(true);
+    expect(notesStore.getState().loading).toBe(true);
   });
 
   it("sets error state", () => {
-    useNotesStore.getState().setError("fail");
-    expect(useNotesStore.getState().error).toBe("fail");
-    expect(useNotesStore.getState().loading).toBe(false);
+    notesStore.getState().setError("fail");
+    expect(notesStore.getState().error).toBe("fail");
+    expect(notesStore.getState().loading).toBe(false);
   });
 
   it("clears state", () => {
-    useNotesStore.getState().setNotes([{ id: "1" }]);
-    useNotesStore.getState().clear();
-    expect(useNotesStore.getState().notes).toEqual([]);
+    notesStore.getState().setNotes([{ id: "1" }]);
+    notesStore.getState().clear();
+    expect(notesStore.getState().notes).toEqual([]);
   });
 });

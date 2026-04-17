@@ -1,6 +1,6 @@
-import { createStore, useStore } from 'zustand';
+import { createStore } from 'zustand';
 
-const notesStoreImpl = (set, get) => ({
+export const notesStore = createStore((set, get) => ({
   notes: [],
   currentNote: null,
   loading: false,
@@ -22,6 +22,7 @@ const notesStoreImpl = (set, get) => ({
       set({ notes, loading: false });
     } catch (err) {
       set({ error: err.message, loading: false });
+      throw err;
     }
   },
   
@@ -91,13 +92,15 @@ const notesStoreImpl = (set, get) => ({
       throw err;
     }
   },
-});
+}));
 
-export const notesStore = createStore(notesStoreImpl);
-
-// React Hook export for tests and components
-export const useNotesStore = () => useStore(notesStore);
-
-// Also export the store directly for .getState() access in tests
-useNotesStore.getState = () => notesStore.getState();
-useNotesStore.setState = (state) => notesStore.setState(state);
+// React Hook export for components
+export const useNotesStore = (selector) => {
+  // For tests that call useNotesStore.getState() directly
+  if (typeof selector !== 'function') {
+    return notesStore.getState();
+  }
+  // For React components
+  const { useStore } = require('zustand');
+  return useStore(notesStore, selector);
+};
