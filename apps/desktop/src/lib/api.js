@@ -66,8 +66,16 @@ export const api = {
   getAiModels: () => request("/api/ai/models"),
   aiChat: (data) => request("/api/ai/chat", { method: "POST", body: JSON.stringify(data) }),
   aiExplain: (data) => request("/api/ai/explain", { method: "POST", body: JSON.stringify(data) }),
-  aiGenerateCards: (data) => request("/api/ai/generate-cards", { method: "POST", body: JSON.stringify(data) }),
+  generateCards: (noteId, data) => request(`/api/ai/generate-cards?note_id=${noteId}`, { method: "POST", body: JSON.stringify(data) }),
   aiSuggestCardsForGaps: (data) => request("/api/ai/suggest-cards-for-gaps", { method: "POST", body: JSON.stringify(data) }),
+  
+  // Anki Push
+  pushToAnki: (noteId, deckName = null) => {
+    const url = deckName
+      ? `/api/anki/push/${noteId}?deck_name=${encodeURIComponent(deckName)}`
+      : `/api/anki/push/${noteId}`;
+    return request(url, { method: "POST" });
+  },
   
   // Coverage
   getCoverage: (noteId, mode = "apcg") => request(`/api/notes/${noteId}/coverage?mode=${mode}`),

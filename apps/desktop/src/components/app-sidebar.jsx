@@ -9,10 +9,12 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
+  Edit3,
 } from "lucide-react";
 import { Button } from "./ui/button";
 
 const navItems = [
+  { id: "editor", label: "Editor", icon: Edit3 },
   { id: "workspace", label: "Workspace", icon: FolderOpen },
   { id: "import", label: "Import", icon: Upload },
   { id: "library", label: "Library", icon: Library },

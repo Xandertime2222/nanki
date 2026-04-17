@@ -8,9 +8,11 @@ import { LibraryView } from "../features/library/library-view";
 import { AnalysisView } from "../features/analysis/analysis-view";
 import { ReviewView } from "../features/review/review-view";
 import { SettingsView } from "../features/settings/settings-view";
+import { EditorView } from "../features/editor/editor-view";
 import { motion, AnimatePresence } from "framer-motion";
 
 const views = {
+  editor: EditorView,
   workspace: WorkspaceView,
   import: ImportView,
   library: LibraryView,
