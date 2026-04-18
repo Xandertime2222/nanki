@@ -1,15 +1,17 @@
-import { createStore, useStore } from 'zustand';
+import { create } from 'zustand';
+import { notesStore } from './notes-store';
 
-const cardsStoreImpl = (set, get) => ({
+export const useCardsStore = create((set, get) => ({
   cards: [],
   loading: false,
   error: null,
-  
+
   // Load cards for a note
   loadCards: async (noteId) => {
     set({ loading: true, error: null });
     try {
-      const note = await import('./notes-store').then(s => s.notesStore.getState().loadNote(noteId));
+      const { api } = await import('../lib/api');
+      const note = await api.getNote(noteId);
       set({ cards: note.cards || [], loading: false });
       return note.cards || [];
     } catch (err) {
@@ -17,7 +19,7 @@ const cardsStoreImpl = (set, get) => ({
       throw err;
     }
   },
-  
+
   // Create card
   createCard: async (noteId, data) => {
     try {
@@ -29,7 +31,7 @@ const cardsStoreImpl = (set, get) => ({
       throw err;
     }
   },
-  
+
   // Update card
   updateCard: async (noteId, cardId, data) => {
     try {
@@ -43,7 +45,7 @@ const cardsStoreImpl = (set, get) => ({
       throw err;
     }
   },
-  
+
   // Delete card
   deleteCard: async (noteId, cardId) => {
     try {
@@ -54,7 +56,7 @@ const cardsStoreImpl = (set, get) => ({
       throw err;
     }
   },
-  
+
   // Export cards
   exportCsv: async (noteId) => {
     try {
@@ -64,7 +66,7 @@ const cardsStoreImpl = (set, get) => ({
       throw err;
     }
   },
-  
+
   exportAnkiTxt: async (noteId) => {
     try {
       const { api } = await import('../lib/api');
@@ -73,7 +75,7 @@ const cardsStoreImpl = (set, get) => ({
       throw err;
     }
   },
-  
+
   exportApkg: async (noteId) => {
     try {
       const { api } = await import('../lib/api');
@@ -82,22 +84,13 @@ const cardsStoreImpl = (set, get) => ({
       throw err;
     }
   },
-  
+
   // Set cards directly
   setCards: (cards) => set({ cards }),
-  
+
   // Clear error
   clearError: () => set({ error: null }),
-});
+}));
 
-export const cardsStore = createStore(cardsStoreImpl);
-
-// React Hook export for components
-export const useCardsStore = (selector) => {
-  // For tests that call useCardsStore.getState() directly
-  if (typeof selector !== 'function') {
-    return cardsStore.getState();
-  }
-  // For React components
-  return useStore(cardsStore, selector);
-};
+// Export store for non-hook access
+export const cardsStore = { getState: () => useCardsStore.getState() };

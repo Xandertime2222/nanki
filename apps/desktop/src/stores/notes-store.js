@@ -1,18 +1,18 @@
-import { createStore } from 'zustand';
+import { create } from 'zustand';
 
-export const notesStore = createStore((set, get) => ({
+export const useNotesStore = create((set, get) => ({
   notes: [],
   currentNote: null,
   loading: false,
   error: null,
-  
+
   // Set methods for tests
   setNotes: (notes) => set({ notes }),
   setCurrentNote: (note) => set({ currentNote: note }),
   setLoading: (loading) => set({ loading }),
   setError: (error) => set({ error }),
   clear: () => set({ notes: [], currentNote: null, loading: false, error: null }),
-  
+
   // Load all notes
   loadNotes: async () => {
     set({ loading: true, error: null });
@@ -25,7 +25,7 @@ export const notesStore = createStore((set, get) => ({
       throw err;
     }
   },
-  
+
   // Load single note
   loadNote: async (id) => {
     set({ loading: true, error: null });
@@ -39,7 +39,7 @@ export const notesStore = createStore((set, get) => ({
       throw err;
     }
   },
-  
+
   // Create note
   createNote: async (data) => {
     try {
@@ -51,7 +51,7 @@ export const notesStore = createStore((set, get) => ({
       throw err;
     }
   },
-  
+
   // Update note
   updateNote: async (id, data) => {
     try {
@@ -66,7 +66,7 @@ export const notesStore = createStore((set, get) => ({
       throw err;
     }
   },
-  
+
   // Delete note
   deleteNote: async (id) => {
     try {
@@ -80,7 +80,7 @@ export const notesStore = createStore((set, get) => ({
       throw err;
     }
   },
-  
+
   // Duplicate note
   duplicateNote: async (id, newTitle) => {
     try {
@@ -94,13 +94,5 @@ export const notesStore = createStore((set, get) => ({
   },
 }));
 
-// React Hook export for components
-export const useNotesStore = (selector) => {
-  // For tests that call useNotesStore.getState() directly
-  if (typeof selector !== 'function') {
-    return notesStore.getState();
-  }
-  // For React components
-  const { useStore } = require('zustand');
-  return useStore(notesStore, selector);
-};
+// Export store for non-hook access
+export const notesStore = { getState: () => useNotesStore.getState() };
