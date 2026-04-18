@@ -105,8 +105,12 @@ pub fn run() {
             // Try to find bundled backend executable first (production mode)
             // Tauri sidecar binaries are placed next to the main executable
             #[cfg(windows)]
-            let bundled_backend_candidates =
-                vec![exe_dir.join("nanki-backend.exe"), resources_dir.join("nanki-backend.exe")];
+            let bundled_backend_candidates = vec![
+                exe_dir.join("nanki-backend.exe"),
+                exe_dir.join("nanki-backend-x86_64-pc-windows-msvc.exe"),
+                resources_dir.join("nanki-backend.exe"),
+                resources_dir.join("nanki-backend-x86_64-pc-windows-msvc.exe"),
+            ];
 
             #[cfg(not(windows))]
             let bundled_backend_candidates =
