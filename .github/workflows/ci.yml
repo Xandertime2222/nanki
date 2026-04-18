@@ -138,7 +138,7 @@ jobs:
             --collect-all openai \
             --collect-all tiktoken \
             --collect-all anki \
-            --collect-all multipart \  # python-multipart for FastAPI forms
+            --collect-all multipart \
             --collect-all nanki_core \
             --collect-all fastapi \
             --collect-all uvicorn \
@@ -194,7 +194,7 @@ jobs:
             --collect-all openai \
             --collect-all tiktoken \
             --collect-all anki \
-            --collect-all multipart \  # python-multipart for FastAPI forms
+            --collect-all multipart \
             --collect-all nanki_core \
             --collect-all fastapi \
             --collect-all uvicorn \
