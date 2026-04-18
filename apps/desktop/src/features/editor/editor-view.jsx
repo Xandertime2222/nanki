@@ -8,10 +8,41 @@ import {
   Edit3, Save, Trash2, Plus, Sparkles, FileText, Tag, Layers,
   Bold, Italic, Heading1, Heading2, Heading3, List, Quote, Code,
   Eraser, X, ChevronDown, ChevronRight, Search, MoreVertical,
-  Copy, Download, Eye, Settings, BookOpen, RefreshCw, Moon, Sun, Monitor
+  Copy, Download, Eye, Settings, BookOpen, RefreshCw, Moon, Sun, Monitor,
+  Send, MessageSquare, Lightbulb, Loader2
 } from "lucide-react";
+import { Card, CardContent } from "../../components/ui/card";
 import { toast } from "sonner";
 import { api } from "../../lib/api";
+
+// Simple markdown to HTML converter (client-side)
+function markdownToHtml(md) {
+  if (!md) return "";
+  let html = md
+    // Code blocks
+    .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
+    // Inline code
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    // Headings
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    // Bold and italic
+    .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    // Links
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+    // Horizontal rule
+    .replace(/^---$/gm, '<hr/>')
+    // Blockquotes
+    .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
+    // Unordered lists
+    .replace(/^- (.+)$/gm, '<li>$1</li>')
+    // Line breaks
+    .replace(/\n/g, '<br/>');
+  return html;
+}
 
 // Quick Card Dock component
 function QuickCardDock({ noteId, deck, onSave, onSaveAndPush }) {
@@ -167,13 +198,24 @@ export function EditorView() {
   const [theme, setTheme] = useState("auto");
   const [selection, setSelection] = useState(null);
   const [showSource, setShowSource] = useState(false);
+  const [showAiPanel, setShowAiPanel] = useState(false);
+  const [aiMode, setAiMode] = useState("chat");
+  const [showPreview, setShowPreview] = useState(false);
   const [coverageView, setCoverageView] = useState(false);
   const [coverageReport, setCoverageReport] = useState(null);
   const [coverageLoading, setCoverageLoading] = useState(false);
   const [noteSource, setNoteSource] = useState(null);
   const editorRef = useRef(null);
+  const chatEndRef = useRef(null);
   const saveTimerRef = useRef(null);
   const [wordCount, setWordCount] = useState(0);
+  // AI Panel state
+  const [chatMessages, setChatMessages] = useState([]);
+  const [aiInput, setAiInput] = useState("");
+  const [aiExplainContext, setAiExplainContext] = useState("");
+  const [aiExplainInstructions, setAiExplainInstructions] = useState("");
+  const [aiProcessing, setAiProcessing] = useState(false);
+  const [explainResult, setExplainResult] = useState(null);
 
   // Load notes on mount
   useEffect(() => {
@@ -287,6 +329,8 @@ export function EditorView() {
         setSelection(null);
         setShowCardDrawer(false);
         setShowSearch(false);
+        setShowAiPanel(false);
+        setShowPreview(false);
       }
     };
     document.addEventListener("keydown", handleKeydown);
@@ -393,7 +437,7 @@ export function EditorView() {
       case "h1": replacement = `# ${selected || "Heading"}`; break;
       case "h2": replacement = `## ${selected || "Heading"}`; break;
       case "h3": replacement = `### ${selected || "Heading"}`; break;
-      case "bullets": replacement = `- ${selected || "Item"}`; break;
+      case "ul": replacement = `- ${selected || "Item"}`; break;
       case "quote": replacement = `> ${selected || "Quote"}`; break;
       case "code": replacement = `\`${selected || "code"}\``; cursorOffset = selected ? 0 : 1; break;
       case "clear": replacement = selected; break;
@@ -496,21 +540,51 @@ export function EditorView() {
       return;
     }
     try {
-      let url;
-      switch (format) {
-        case "csv": url = `/api/notes/${noteId}/cards/export/csv`; break;
-        case "anki-txt": url = `/api/notes/${noteId}/cards/export/anki-txt`; break;
-        case "apkg": url = `/api/notes/${noteId}/cards/export/apkg`; break;
-        default: return;
-      }
-      const result = await api.exportCards(url, format);
-      if (result.url) {
+      const result = await api.exportCards(noteId, format);
+      toast.success(`Exported as ${format.toUpperCase()}`);
+      // Trigger download from backend URL
+      if (result?.url) {
         window.open(result.url, "_blank");
       }
-      toast.success(`Exported as ${format.toUpperCase()}`);
     } catch (err) {
       toast.error(`Export failed: ${err.message}`);
     }
+  };
+
+  // AI Chat handler
+  const handleAiChat = async () => {
+    if (!aiInput.trim() || !noteId) return;
+    setAiProcessing(true);
+    const userMessage = { role: "user", content: aiInput, timestamp: new Date().toLocaleTimeString() };
+    setChatMessages((prev) => [...prev, userMessage]);
+    const currentInput = aiInput;
+    setAiInput("");
+    try {
+      const contextText = selection?.text || content?.slice(0, 3000) || "";
+      const result = await api.aiChat({ message: currentInput, note_id: noteId, context_text: contextText });
+      const aiText = result?.content || result?.response || result?.text || "No response";
+      setChatMessages((prev) => [...prev, { role: "assistant", content: aiText, timestamp: new Date().toLocaleTimeString() }]);
+    } catch (err) {
+      setChatMessages((prev) => [...prev, { role: "assistant", content: `Error: ${err.message}`, timestamp: new Date().toLocaleTimeString() }]);
+    }
+    setAiProcessing(false);
+  };
+
+  // AI Explain handler
+  const handleAiExplain = async () => {
+    if (!aiExplainContext.trim()) return;
+    setAiProcessing(true);
+    try {
+      const result = await api.aiExplain({
+        context_text: aiExplainContext,
+        instructions: aiExplainInstructions,
+        note_id: noteId,
+      });
+      setExplainResult(result?.explanation || result?.content || result?.response || "No explanation returned");
+    } catch (err) {
+      toast.error(`Explain failed: ${err.message}`);
+    }
+    setAiProcessing(false);
   };
 
   // Theme cycle
@@ -649,6 +723,16 @@ export function EditorView() {
                   <BookOpen className="h-3.5 w-3.5 mr-1" /> Coverage
                 </Button>
 
+                {/* Preview Toggle */}
+                <Button variant="outline" size="sm" onClick={() => setShowPreview(!showPreview)} title="Toggle Markdown Preview">
+                  <Eye className="h-3.5 w-3.5 mr-1" /> Preview
+                </Button>
+
+                {/* AI Panel Toggle */}
+                <Button variant={showAiPanel ? "secondary" : "outline"} size="sm" onClick={() => setShowAiPanel(!showAiPanel)}>
+                  <MessageSquare className="h-3.5 w-3.5 mr-1" /> AI
+                </Button>
+
                 {/* Save */}
                 <Button variant="outline" size="sm" onClick={handleSave} disabled={saving}>
                   <Save className="h-3.5 w-3.5 mr-1" />
@@ -757,6 +841,28 @@ export function EditorView() {
                         )}
                       </>
                     )}
+                  </div>
+                </div>
+              ) : showPreview ? (
+                // Split Preview
+                <div className="flex-1 flex min-h-0">
+                  <div className="flex-1 flex flex-col min-h-0">
+                    <textarea
+                      ref={editorRef}
+                      value={content}
+                      onChange={(e) => { setContent(e.target.value); scheduleSave(); }}
+                      onSelect={handleEditorSelect}
+                      onMouseUp={handleEditorSelect}
+                      placeholder="Write your notes here... Markdown supported"
+                      className="flex-1 w-full resize-none border-none outline-none bg-transparent font-mono text-sm p-4"
+                    />
+                  </div>
+                  <div className="w-px border-l bg-border" />
+                  <div className="flex-1 overflow-auto p-4 bg-background">
+                    <div
+                      className="prose prose-sm max-w-none prose-headings:font-semibold prose-code:bg-muted prose-code:px-1 prose-code:rounded prose-pre:bg-muted prose-pre:rounded"
+                      dangerouslySetInnerHTML={{ __html: markdownToHtml(content) }}
+                    />
                   </div>
                 </div>
               ) : (
@@ -873,6 +979,136 @@ export function EditorView() {
                 </aside>
               )}
             </div>
+
+            {/* AI Panel (right sidebar) */}
+            {showAiPanel && (
+              <div className="w-96 border-l bg-muted/20 flex flex-col min-h-0">
+                <div className="p-3 border-b flex items-center justify-between">
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant={aiMode === "chat" ? "secondary" : "ghost"}
+                      onClick={() => setAiMode("chat")}
+                      className="h-7 text-xs"
+                    >
+                      <MessageSquare className="h-3.5 w-3.5 mr-1" /> Chat
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={aiMode === "explain" ? "secondary" : "ghost"}
+                      onClick={() => setAiMode("explain")}
+                      className="h-7 text-xs"
+                    >
+                      <Lightbulb className="h-3.5 w-3.5 mr-1" /> Explain
+                    </Button>
+                  </div>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowAiPanel(false)}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                {aiMode === "chat" && (
+                  <div className="flex-1 flex flex-col min-h-0">
+                    {/* Chat Messages */}
+                    <div className="flex-1 overflow-y-auto p-3 space-y-3">
+                      {chatMessages.length === 0 && (
+                        <p className="text-sm text-muted-foreground text-center py-8">
+                          Start a conversation about this note. Selected text will be included as context.
+                        </p>
+                      )}
+                      {chatMessages.map((msg, i) => (
+                        <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                          <div className={`max-w-[85%] rounded-lg p-3 text-sm ${
+                            msg.role === "user"
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-muted"
+                          }`}>
+                            <p className="whitespace-pre-wrap">{msg.content}</p>
+                            <span className="text-xs opacity-60 mt-1 block">{msg.timestamp}</span>
+                          </div>
+                        </div>
+                      ))}
+                      <div ref={chatEndRef} />
+                    </div>
+
+                    {/* Context Preview */}
+                    {selection?.text && (
+                      <div className="px-3 py-1 border-t text-xs text-muted-foreground truncate">
+                        Context: "{selection.text.slice(0, 50)}..."
+                      </div>
+                    )}
+
+                    {/* Chat Input */}
+                    <div className="p-3 border-t flex gap-2">
+                      <textarea
+                        value={aiInput}
+                        onChange={(e) => setAiInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.shiftKey) {
+                            e.preventDefault();
+                            handleAiChat();
+                          }
+                        }}
+                        placeholder="Ask about this note..."
+                        className="flex-1 px-2 py-1.5 border rounded text-sm bg-background resize-none"
+                        rows={2}
+                        disabled={aiProcessing}
+                      />
+                      <Button size="sm" onClick={handleAiChat} disabled={aiProcessing || !aiInput.trim()}>
+                        {aiProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {aiMode === "explain" && (
+                  <div className="flex-1 flex flex-col min-h-0 overflow-y-auto p-3 space-y-3">
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                        Context text
+                      </label>
+                      <textarea
+                        value={aiExplainContext}
+                        onChange={(e) => setAiExplainContext(e.target.value)}
+                        rows={5}
+                        className="w-full px-2 py-1.5 border rounded text-sm bg-background resize-none"
+                        disabled={aiProcessing}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                        Instructions (optional)
+                      </label>
+                      <textarea
+                        value={aiExplainInstructions}
+                        onChange={(e) => setAiExplainInstructions(e.target.value)}
+                        placeholder="e.g., Explain this like I'm 12 years old..."
+                        rows={2}
+                        className="w-full px-2 py-1.5 border rounded text-sm bg-background resize-none"
+                        disabled={aiProcessing}
+                      />
+                    </div>
+                    <Button
+                      size="sm"
+                      className="w-full"
+                      onClick={handleAiExplain}
+                      disabled={aiProcessing || !aiExplainContext.trim()}
+                    >
+                      {aiProcessing ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Lightbulb className="h-4 w-4 mr-1" />}
+                      Explain
+                    </Button>
+                    {explainResult && (
+                      <Card className="mt-2">
+                        <CardContent className="p-3">
+                          <h4 className="text-sm font-medium mb-2">Explanation</h4>
+                          <p className="text-sm whitespace-pre-wrap">{explainResult}</p>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Source Panel (if imported) */}
             {noteSource && noteSource.items?.length > 0 && (

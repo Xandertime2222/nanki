@@ -44,6 +44,10 @@ export function SettingsView() {
     try {
       const data = await api.getSettings();
       setSettings(data);
+      // Fetch AI models after loading settings
+      if (data?.ai?.enabled) {
+        api.getAiModels().then(m => setAiModels(m || [])).catch(() => {});
+      }
     } catch (err) {
       toast.error(`Failed to load settings: ${err.message}`);
     }
@@ -455,42 +459,127 @@ export function SettingsView() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="text-sm font-medium mb-1 block">Default Model</label>
+                      {aiModels.length > 0 ? (
+                        <Select
+                          value={ai.default_model || "__custom__"}
+                          onValueChange={(v) => handleUpdateSetting("ai", "default_model", v === "__custom__" ? "" : v)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select model" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {aiModels.map((m) => (
+                              <SelectItem key={m.id || m} value={m.id || m}>{m.name || m.id || m}</SelectItem>
+                            ))}
+                            <SelectItem value="__custom__">Custom (type below)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      ) : null}
                       <Input
                         value={ai.default_model || ""}
                         onChange={(e) => handleUpdateSetting("ai", "default_model", e.target.value)}
-                        placeholder="Model ID or blank for default"
+                        placeholder={aiModels.length === 0 ? "Model ID or blank for default" : "Or type a custom model name"}
+                        className={aiModels.length > 0 ? "mt-1" : ""}
                       />
                     </div>
                     <div>
                       <label className="text-sm font-medium mb-1 block">Chat Model</label>
+                      {aiModels.length > 0 ? (
+                        <Select
+                          value={ai.chat_model || "__custom__"}
+                          onValueChange={(v) => handleUpdateSetting("ai", "chat_model", v === "__custom__" ? "" : v)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select model" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {aiModels.map((m) => (
+                              <SelectItem key={m.id || m} value={m.id || m}>{m.name || m.id || m}</SelectItem>
+                            ))}
+                            <SelectItem value="__custom__">Custom (type below)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      ) : null}
                       <Input
                         value={ai.chat_model || ""}
                         onChange={(e) => handleUpdateSetting("ai", "chat_model", e.target.value)}
-                        placeholder="Uses default if blank"
+                        placeholder={aiModels.length === 0 ? "Uses default if blank" : "Or type a custom model name"}
+                        className={aiModels.length > 0 ? "mt-1" : ""}
                       />
                     </div>
                     <div>
                       <label className="text-sm font-medium mb-1 block">Explain Model</label>
+                      {aiModels.length > 0 ? (
+                        <Select
+                          value={ai.explain_model || "__custom__"}
+                          onValueChange={(v) => handleUpdateSetting("ai", "explain_model", v === "__custom__" ? "" : v)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select model" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {aiModels.map((m) => (
+                              <SelectItem key={m.id || m} value={m.id || m}>{m.name || m.id || m}</SelectItem>
+                            ))}
+                            <SelectItem value="__custom__">Custom (type below)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      ) : null}
                       <Input
                         value={ai.explain_model || ""}
                         onChange={(e) => handleUpdateSetting("ai", "explain_model", e.target.value)}
-                        placeholder="Uses default if blank"
+                        placeholder={aiModels.length === 0 ? "Uses default if blank" : "Or type a custom model name"}
+                        className={aiModels.length > 0 ? "mt-1" : ""}
                       />
                     </div>
                     <div>
                       <label className="text-sm font-medium mb-1 block">Flashcard Model</label>
+                      {aiModels.length > 0 ? (
+                        <Select
+                          value={ai.flashcard_model || "__custom__"}
+                          onValueChange={(v) => handleUpdateSetting("ai", "flashcard_model", v === "__custom__" ? "" : v)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select model" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {aiModels.map((m) => (
+                              <SelectItem key={m.id || m} value={m.id || m}>{m.name || m.id || m}</SelectItem>
+                            ))}
+                            <SelectItem value="__custom__">Custom (type below)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      ) : null}
                       <Input
                         value={ai.flashcard_model || ""}
                         onChange={(e) => handleUpdateSetting("ai", "flashcard_model", e.target.value)}
-                        placeholder="Uses default if blank"
+                        placeholder={aiModels.length === 0 ? "Uses default if blank" : "Or type a custom model name"}
+                        className={aiModels.length > 0 ? "mt-1" : ""}
                       />
                     </div>
                     <div>
                       <label className="text-sm font-medium mb-1 block">Auto Flashcard Model</label>
+                      {aiModels.length > 0 ? (
+                        <Select
+                          value={ai.auto_flashcard_model || "__custom__"}
+                          onValueChange={(v) => handleUpdateSetting("ai", "auto_flashcard_model", v === "__custom__" ? "" : v)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select model" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {aiModels.map((m) => (
+                              <SelectItem key={m.id || m} value={m.id || m}>{m.name || m.id || m}</SelectItem>
+                            ))}
+                            <SelectItem value="__custom__">Custom (type below)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      ) : null}
                       <Input
                         value={ai.auto_flashcard_model || ""}
                         onChange={(e) => handleUpdateSetting("ai", "auto_flashcard_model", e.target.value)}
-                        placeholder="Uses default if blank"
+                        placeholder={aiModels.length === 0 ? "Uses default if blank" : "Or type a custom model name"}
+                        className={aiModels.length > 0 ? "mt-1" : ""}
                       />
                     </div>
                     <div>

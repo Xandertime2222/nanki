@@ -2,8 +2,9 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Badge } from "../../components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { useAppStore } from "../../stores/app-store";
-import { BarChart3, RefreshCw, CheckCircle, XCircle, AlertTriangle, Loader2 } from "lucide-react";
+import { BarChart3, RefreshCw, CheckCircle, XCircle, AlertTriangle, Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../lib/api";
 
@@ -14,6 +15,8 @@ export function AnalysisView() {
   const [coverage, setCoverage] = useState(null);
   const [loading, setLoading] = useState(false);
   const [loadingCoverage, setLoadingCoverage] = useState(false);
+  const [coverageMode, setCoverageMode] = useState("apcg");
+  const [generatingCards, setGeneratingCards] = useState(false);
 
   useEffect(() => {
     if (backendStatus === "running") {
@@ -35,13 +38,31 @@ export function AnalysisView() {
   const loadCoverage = async (noteId) => {
     setLoadingCoverage(true);
     try {
-      const data = await api.getCoverage(noteId, "apcg");
+      const data = await api.getCoverage(noteId, coverageMode);
       setCoverage(data);
     } catch (err) {
       toast.error(`Failed to load coverage: ${err.message}`);
       setCoverage(null);
     }
     setLoadingCoverage(false);
+  };
+
+  const handleGenerateCardsForGaps = async () => {
+    if (!selectedNote || !coverage?.gaps?.length) {
+      toast.error("No gaps to generate cards from");
+      return;
+    }
+    setGeneratingCards(true);
+    try {
+      const result = await api.aiSuggestCardsForGaps({
+        note_id: selectedNote.meta.id,
+        gaps: coverage.gaps,
+      });
+      toast.success(`Generated ${result.cards?.length || 0} card suggestions`);
+    } catch (err) {
+      toast.error(`Failed: ${err.message}`);
+    }
+    setGeneratingCards(false);
   };
 
   const handleSelectNote = (note) => {
@@ -117,6 +138,22 @@ export function AnalysisView() {
             <CardDescription>
               APCG analysis shows how well your note content maps to potential flashcards
             </CardDescription>
+            {selectedNote && (
+              <div className="mt-2">
+                <Select value={coverageMode} onValueChange={(v) => { setCoverageMode(v); loadCoverage(selectedNote.meta.id); }}>
+                  <SelectTrigger className="w-48 h-8">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="apcg">APCG (Auto)</SelectItem>
+                    <SelectItem value="history">History / Geography</SelectItem>
+                    <SelectItem value="science">Science / Medicine</SelectItem>
+                    <SelectItem value="vocabulary">Vocabulary</SelectItem>
+                    <SelectItem value="universal">Universal</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </CardHeader>
           <CardContent>
             {!selectedNote ? (
@@ -165,11 +202,30 @@ export function AnalysisView() {
 
                 {coverage.gaps && coverage.gaps.length > 0 && (
                   <div>
-                    <h4 className="font-medium mb-2">Suggested Topics</h4>
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="font-medium">Gaps & Suggested Topics</h4>
+                      <Button variant="outline" size="sm" onClick={handleGenerateCardsForGaps} disabled={generatingCards}>
+                        {generatingCards ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Sparkles className="h-4 w-4 mr-1" />}
+                        Generate Cards for Gaps
+                      </Button>
+                    </div>
                     <div className="space-y-2">
-                      {coverage.gaps.slice(0, 5).map((gap, i) => (
-                        <div key={i} className="p-2 bg-muted rounded-md text-sm">
+                      {coverage.gaps.map((gap, i) => (
+                        <div key={i} className="p-2 bg-muted/50 rounded-md text-sm">
                           {typeof gap === "string" ? gap : gap.topic || JSON.stringify(gap)}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {coverage.propositions && coverage.propositions.length > 0 && (
+                  <div>
+                    <h4 className="font-medium mb-2">Propositions ({coverage.propositions.filter(p => p.matched).length}/{coverage.propositions.length} covered)</h4>
+                    <div className="space-y-1 max-h-80 overflow-auto">
+                      {coverage.propositions.map((p, i) => (
+                        <div key={i} className={`border-l-4 px-3 py-2 text-sm ${p.matched ? "border-green-500 bg-green-50 dark:bg-green-950/20" : "border-red-500 bg-red-50 dark:bg-red-950/20"}`}>
+                          <span className="font-medium">{p.matched ? "✓" : "✗"}</span> {p.text || "No text"}
                         </div>
                       ))}
                     </div>

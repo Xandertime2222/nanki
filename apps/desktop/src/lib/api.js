@@ -80,7 +80,31 @@ export const api = {
   // Coverage
   getCoverage: (noteId, mode = "apcg") => request(`/api/notes/${noteId}/coverage?mode=${mode}`),
   getCoverageSummary: (noteId) => request(`/api/notes/${noteId}/coverage/summary`),
-  
+  postCoverageApcg: (noteId, data) => request(`/api/notes/${noteId}/coverage/apcg`, { method: "POST", body: JSON.stringify(data) }),
+
+  // Source
+  getNoteSource: (noteId) => request(`/api/notes/${noteId}/source`),
+  getSourceFile: (noteId, filename) => request(`/api/notes/${noteId}/source/file/${filename}`),
+
+  // Render / Conversion
+  renderMarkdown: (markdown) => request("/api/render-markdown", { method: "POST", body: JSON.stringify({ markdown }) }),
+  convertHtml: (html) => request("/api/convert-html", { method: "POST", body: JSON.stringify({ html }) }),
+
+  // Download
+  downloadFile: (path) => `${API_BASE}/api/download?path=${encodeURIComponent(path)}`,
+
+  // Export helpers (return response body from the POST calls)
+  exportCards: (noteId, format) => {
+    // format: "csv" | "anki-txt" | "apkg"
+    if (format === "csv") return api.exportCsv(noteId);
+    if (format === "anki-txt") return api.exportAnkiTxt(noteId);
+    if (format === "apkg") return api.exportApkg(noteId);
+    throw new Error(`Unknown export format: ${format}`);
+  },
+
+  // AI Coverage
+  getAiCoverage: (noteId, text) => request(`/api/notes/${noteId}/coverage/ai`, { method: "POST", body: JSON.stringify({ text }) }),
+
   // Updates
   checkForUpdates: () => request("/api/updates/check"),
 };
