@@ -159,8 +159,9 @@ jobs:
           path: apps/desktop/src-tauri/binaries
       - name: Rename backend for Tauri
         shell: bash
+        working-directory: apps/desktop/src-tauri
         run: |
-          mv apps/desktop/src-tauri/binaries/nanki-backend.exe apps/desktop/src-tauri/binaries/nanki-backend-x86_64-pc-windows-msvc.exe
+          mv binaries/nanki-backend.exe binaries/nanki-backend-x86_64-pc-windows-msvc.exe
       - name: Install Rust
         run: |
           Invoke-WebRequest -Uri https://win.rustup.rs/x86_64 -OutFile rustup-init.exe
@@ -206,9 +207,10 @@ jobs:
           name: nanki-backend-macos
           path: apps/desktop/src-tauri/binaries
       - name: Rename backend for Tauri
+        working-directory: apps/desktop/src-tauri
         run: |
-          mv apps/desktop/src-tauri/binaries/nanki-backend apps/desktop/src-tauri/binaries/nanki-backend-aarch64-apple-darwin
-          chmod +x apps/desktop/src-tauri/binaries/nanki-backend-aarch64-apple-darwin
+          mv binaries/nanki-backend binaries/nanki-backend-aarch64-apple-darwin
+          chmod +x binaries/nanki-backend-aarch64-apple-darwin
       - name: Install Rust
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
