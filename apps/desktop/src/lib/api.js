@@ -80,4 +80,7 @@ export const api = {
   // Coverage
   getCoverage: (noteId, mode = "apcg") => request(`/api/notes/${noteId}/coverage?mode=${mode}`),
   getCoverageSummary: (noteId) => request(`/api/notes/${noteId}/coverage/summary`),
+  
+  // Updates
+  checkForUpdates: () => request("/api/updates/check"),
 };
