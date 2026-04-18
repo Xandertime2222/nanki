@@ -1,7 +1,7 @@
-use std::sync::Mutex;
 use std::process::{Command, Child};
-use std::time::Duration;
+use std::sync::Mutex;
 use std::thread;
+use std::time::Duration;
 use tauri::Manager;
 
 struct BackendState {
@@ -36,14 +36,28 @@ fn wait_for_backend(max_retries: u32, interval_ms: u64) -> bool {
             .send()
         {
             Ok(resp) if resp.status().is_success() => {
-                log::info!("Backend responded on attempt {}/{}", i + 1, max_retries);
+                log::info!(
+                    "Backend responded on attempt {}/{}",
+                    i + 1,
+                    max_retries
+                );
                 return true;
             }
             Ok(resp) => {
-                log::debug!("Backend responded with status {} on attempt {}/{}", resp.status(), i + 1, max_retries);
+                log::debug!(
+                    "Backend responded with status {} on attempt {}/{}",
+                    resp.status(),
+                    i + 1,
+                    max_retries
+                );
             }
             Err(e) => {
-                log::debug!("Backend not ready on attempt {}/{}: {}", i + 1, max_retries, e);
+                log::debug!(
+                    "Backend not ready on attempt {}/{}: {}",
+                    i + 1,
+                    max_retries,
+                    e
+                );
             }
         }
         thread::sleep(Duration::from_millis(interval_ms));
@@ -67,7 +81,7 @@ pub fn run() {
 
             // Check if backend is already running (for dev mode)
             let backend_already_running = wait_for_backend(1, 100);
-            
+
             if backend_already_running {
                 log::info!("Backend already running on port 8642");
                 app.manage(AppState {
@@ -79,7 +93,11 @@ pub fn run() {
             // Get executable directory and resource directory
             let exe_path = std::env::current_exe().unwrap_or_else(|_| ".".into());
             let exe_dir = exe_path.parent().unwrap_or(std::path::Path::new("."));
-            let resources_dir = app.handle().path().resource_dir().unwrap_or_else(|_| exe_dir.to_path_buf());
+            let resources_dir = app
+                .handle()
+                .path()
+                .resource_dir()
+                .unwrap_or_else(|_| exe_dir.to_path_buf());
 
             log::info!("Executable directory: {:?}", exe_dir);
             log::info!("Resources directory: {:?}", resources_dir);
@@ -87,17 +105,12 @@ pub fn run() {
             // Try to find bundled backend executable first (production mode)
             // Tauri sidecar binaries are placed next to the main executable
             #[cfg(windows)]
-            let bundled_backend_candidates = vec![
-                exe_dir.join("nanki-backend.exe"),
-                // Also check resource dir for some bundle configurations
-                resources_dir.join("nanki-backend.exe"),
-            ];
+            let bundled_backend_candidates =
+                vec![exe_dir.join("nanki-backend.exe"), resources_dir.join("nanki-backend.exe")];
 
             #[cfg(not(windows))]
-            let bundled_backend_candidates = vec![
-                exe_dir.join("nanki-backend"),
-                resources_dir.join("nanki-backend"),
-            ];
+            let bundled_backend_candidates =
+                vec![exe_dir.join("nanki-backend"), resources_dir.join("nanki-backend")];
 
             let bundled_backend = bundled_backend_candidates
                 .iter()
@@ -106,11 +119,15 @@ pub fn run() {
 
             if let Some(ref backend_exe) = bundled_backend {
                 log::info!("Found bundled backend: {:?}", backend_exe);
-                
+
                 let child = Command::new(backend_exe)
                     .env("NANKI_PORT", "8642")
                     .env("PYTHONUNBUFFERED", "1")
-                    .current_dir(backend_exe.parent().unwrap_or(std::path::Path::new(".")))
+                    .current_dir(
+                        backend_exe
+                            .parent()
+                            .unwrap_or(std::path::Path::new(".")),
+                    )
                     .stdout(std::process::Stdio::piped())
                     .stderr(std::process::Stdio::piped())
                     .spawn();
@@ -125,7 +142,9 @@ pub fn run() {
                         if ready {
                             log::info!("Backend is ready on port 8642");
                         } else {
-                            log::error!("Bundled backend failed to start within 30 seconds");
+                            log::error!(
+                                "Bundled backend failed to start within 30 seconds"
+                            );
                         }
                     }
                     Err(e) => {
@@ -138,34 +157,41 @@ pub fn run() {
                 return Ok(());
             }
 
-            log::info!("No bundled backend found, falling back to Python interpreter");
+            log::info!(
+                "No bundled backend found, falling back to Python interpreter"
+            );
 
             // Fallback to Python interpreter (development mode)
             #[cfg(windows)]
-            let python_candidates = vec!["py", "python", "python3", "python3.12", "python3.11", "python3.13"];
+            let python_candidates =
+                vec!["py", "python", "python3", "python3.12", "python3.11", "python3.13"];
             #[cfg(not(windows))]
-            let python_candidates = vec!["python3", "python", "python3.12", "python3.11", "python3.13"];
-            
-            let python = python_candidates.iter()
-                .find(|cmd| {
-                    Command::new(cmd)
-                        .arg("--version")
-                        .stdout(std::process::Stdio::null())
-                        .stderr(std::process::Stdio::null())
-                        .status()
-                        .is_ok()
-                })
-                .map(|s| s.to_string());
+            let python_candidates =
+                vec!["python3", "python", "python3.12", "python3.11", "python3.13"];
+
+            let python = python_candidates.iter().find(|cmd| {
+                Command::new(cmd)
+                    .arg("--version")
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .status()
+                    .is_ok()
+            }).map(|s| s.to_string());
 
             let python = match python {
                 Some(p) => {
                     log::info!("Found Python interpreter: {}", p);
                     p
-                },
+                }
                 None => {
-                    log::error!("Python interpreter not found. Attempted: {:?}", python_candidates);
+                    log::error!(
+                        "Python interpreter not found. Attempted: {:?}",
+                        python_candidates
+                    );
                     log::error!("Please install Python 3.11+ and add it to PATH.");
-                    log::error!("Alternatively, build the bundled backend with PyInstaller.");
+                    log::error!(
+                        "Alternatively, build the bundled backend with PyInstaller."
+                    );
                     app.manage(AppState {
                         backend: Mutex::new(BackendState { child: None }),
                     });
@@ -176,23 +202,24 @@ pub fn run() {
             // Resolve backend path: try multiple strategies for portability
             #[cfg(windows)]
             let possible_paths = vec![
-                // Installed app paths (resources/ dir)
                 resources_dir.join("backend").join("python-core").join("run.py"),
-                // Developer mode: relative to executable
                 exe_dir.join("backend").join("python-core").join("run.py"),
-                exe_dir.join("..").join("..").join("..").join("backend").join("python-core").join("run.py"),
+                exe_dir
+                    .join("..")
+                    .join("..")
+                    .join("..")
+                    .join("backend")
+                    .join("python-core")
+                    .join("run.py"),
             ];
-            
+
             #[cfg(target_os = "macos")]
             let possible_paths = vec![
-                // Resources directory inside the app bundle
                 resources_dir.join("backend/python-core/run.py"),
-                // Contents/Resources
                 exe_dir.join("../../Resources/backend/python-core/run.py"),
-                // Developer mode
                 exe_dir.join("../../../backend/python-core/run.py"),
             ];
-            
+
             #[cfg(not(any(windows, target_os = "macos")))]
             let possible_paths = vec![
                 exe_dir.join("../share/nanki/backend/python-core/run.py"),
@@ -204,15 +231,22 @@ pub fn run() {
                 .into_iter()
                 .find(|p| p.exists())
                 .unwrap_or_else(|| {
-                    log::warn!("Backend script not found in any location, using default path");
+                    log::warn!(
+                        "Backend script not found in any location, using default path"
+                    );
                     exe_dir.join("backend/python-core/run.py")
                 });
 
-            log::info!("Starting backend: {} {}", python, backend_script.display());
+            log::info!(
+                "Starting backend: {} {}",
+                python,
+                backend_script.display()
+            );
             log::info!("Working directory: {:?}", std::env::current_dir());
 
             // Set working directory to backend location
-            let backend_dir = backend_script.parent().unwrap_or(std::path::Path::new("."));
+            let backend_dir =
+                backend_script.parent().unwrap_or(std::path::Path::new("."));
 
             let child = Command::new(&python)
                 .args(["-u", backend_script.to_str().unwrap_or("")])
@@ -233,9 +267,15 @@ pub fn run() {
                     if ready {
                         log::info!("Backend is ready on port 8642");
                     } else {
-                        log::error!("Backend failed to start within 30 seconds");
-                        log::error!("Make sure Python 3.12+ is installed and all dependencies are available.");
-                        log::error!("Run: pip install -r backend/python-core/requirements.txt");
+                        log::error!(
+                            "Backend failed to start within 30 seconds"
+                        );
+                        log::error!(
+                            "Make sure Python 3.12+ is installed and all dependencies are available."
+                        );
+                        log::error!(
+                            "Run: pip install -r backend/python-core/requirements.txt"
+                        );
                     }
                 }
                 Err(e) => {
@@ -252,3 +292,4 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![backend_status])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
