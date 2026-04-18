@@ -108,6 +108,7 @@ jobs:
           python-version: "3.13"
       - run: pip install -r requirements.txt pyinstaller
       - name: Build backend executable
+        shell: bash
         run: |
           pyinstaller --onefile --name nanki-backend \
             --hidden-import nanki_core \
