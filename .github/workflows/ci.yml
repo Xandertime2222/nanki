@@ -122,6 +122,22 @@ jobs:
             --hidden-import nanki_core.routes.ai \
             --hidden-import nanki_core.routes.coverage \
             --hidden-import nanki_core.routes.render \
+            --hidden-import nanki_core.importers \
+            --hidden-import nanki_core.exporters \
+            --hidden-import nanki_core.ai \
+            --hidden-import nanki_core.anki_connect \
+            --hidden-import nanki_core.config \
+            --hidden-import nanki_core.coverage \
+            --hidden-import nanki_core.coverage_utils \
+            --hidden-import nanki_core.models \
+            --hidden-import nanki_core.prompts \
+            --hidden-import nanki_core.storage \
+            --hidden-import fitz \
+            --hidden-import markdownify \
+            --hidden-import mistune \
+            --hidden-import openai \
+            --hidden-import tiktoken \
+            --hidden-import anki \
             --collect-all nanki_core \
             --collect-all fastapi \
             --collect-all uvicorn \
@@ -161,6 +177,22 @@ jobs:
             --hidden-import nanki_core.routes.ai \
             --hidden-import nanki_core.routes.coverage \
             --hidden-import nanki_core.routes.render \
+            --hidden-import nanki_core.importers \
+            --hidden-import nanki_core.exporters \
+            --hidden-import nanki_core.ai \
+            --hidden-import nanki_core.anki_connect \
+            --hidden-import nanki_core.config \
+            --hidden-import nanki_core.coverage \
+            --hidden-import nanki_core.coverage_utils \
+            --hidden-import nanki_core.models \
+            --hidden-import nanki_core.prompts \
+            --hidden-import nanki_core.storage \
+            --hidden-import fitz \
+            --hidden-import markdownify \
+            --hidden-import mistune \
+            --hidden-import openai \
+            --hidden-import tiktoken \
+            --hidden-import anki \
             --collect-all nanki_core \
             --collect-all fastapi \
             --collect-all uvicorn \
