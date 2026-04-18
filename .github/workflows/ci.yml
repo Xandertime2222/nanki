@@ -92,12 +92,55 @@ jobs:
         with:
           name: pytest-output
           path: backend/python-core/pytest-output.log
+
+  # ── Build Backend Executable ────────────────────────────────────
+
+  build-backend-windows:
+    name: Build Backend (Windows)
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: backend/python-core
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -r requirements.txt pyinstaller
+      - name: Build backend executable
+        run: pyinstaller --onefile --name nanki-backend run.py
+      - name: Upload backend executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: nanki-backend-windows
+          path: backend/python-core/dist/nanki-backend.exe
+
+  build-backend-macos:
+    name: Build Backend (macOS)
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: backend/python-core
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -r requirements.txt pyinstaller
+      - name: Build backend executable
+        run: pyinstaller --onefile --name nanki-backend run.py
+      - name: Upload backend executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: nanki-backend-macos
+          path: backend/python-core/dist/nanki-backend
+
   # ── Desktop App Builds ─────────────────────────────────────────
 
   build-windows:
     name: Build Windows App
-    needs: [frontend-test, backend-test]
-    if: always() && needs.backend-test.result == 'success'
+    needs: [frontend-test, backend-test, build-backend-windows]
+    if: always() && needs.backend-test.result == 'success' && needs.build-backend-windows.result == 'success'
     runs-on: windows-latest
     defaults:
       run:
@@ -109,9 +152,15 @@ jobs:
           node-version: 20
           cache: npm
           cache-dependency-path: apps/desktop/package-lock.json
-      - uses: actions/setup-python@v5
+      - name: Download backend executable
+        uses: actions/download-artifact@v4
         with:
-          python-version: "3.13"
+          name: nanki-backend-windows
+          path: apps/desktop/src-tauri/binaries
+      - name: Rename backend for Tauri
+        run: |
+          cd apps/desktop/src-tauri/binaries
+          mv nanki-backend.exe nanki-backend-x86_64-pc-windows-msvc.exe
       - name: Install Rust
         run: |
           Invoke-WebRequest -Uri https://win.rustup.rs/x86_64 -OutFile rustup-init.exe
@@ -138,8 +187,8 @@ jobs:
 
   build-macos:
     name: Build macOS App
-    needs: [frontend-test, backend-test]
-    if: always() && needs.backend-test.result == 'success'
+    needs: [frontend-test, backend-test, build-backend-macos]
+    if: always() && needs.backend-test.result == 'success' && needs.build-backend-macos.result == 'success'
     runs-on: macos-latest
     defaults:
       run:
@@ -151,9 +200,16 @@ jobs:
           node-version: 20
           cache: npm
           cache-dependency-path: apps/desktop/package-lock.json
-      - uses: actions/setup-python@v5
+      - name: Download backend executable
+        uses: actions/download-artifact@v4
         with:
-          python-version: "3.13"
+          name: nanki-backend-macos
+          path: apps/desktop/src-tauri/binaries
+      - name: Rename backend for Tauri
+        run: |
+          cd apps/desktop/src-tauri/binaries
+          mv nanki-backend nanki-backend-aarch64-apple-darwin
+          chmod +x nanki-backend-aarch64-apple-darwin
       - name: Install Rust
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y

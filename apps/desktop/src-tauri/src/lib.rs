@@ -76,8 +76,71 @@ pub fn run() {
                 return Ok(());
             }
 
-            // Start backend only if not running
-            // Resolve Python interpreter: try multiple names for cross-platform
+            // Get executable directory and resource directory
+            let exe_path = std::env::current_exe().unwrap_or_else(|_| ".".into());
+            let exe_dir = exe_path.parent().unwrap_or(std::path::Path::new("."));
+            let resources_dir = app.handle().path().resource_dir().unwrap_or_else(|_| exe_dir.to_path_buf());
+
+            log::info!("Executable directory: {:?}", exe_dir);
+            log::info!("Resources directory: {:?}", resources_dir);
+
+            // Try to find bundled backend executable first (production mode)
+            // Tauri sidecar binaries are placed next to the main executable
+            #[cfg(windows)]
+            let bundled_backend_candidates = vec![
+                exe_dir.join("nanki-backend.exe"),
+                // Also check resource dir for some bundle configurations
+                resources_dir.join("nanki-backend.exe"),
+            ];
+
+            #[cfg(not(windows))]
+            let bundled_backend_candidates = vec![
+                exe_dir.join("nanki-backend"),
+                resources_dir.join("nanki-backend"),
+            ];
+
+            let bundled_backend = bundled_backend_candidates
+                .iter()
+                .find(|p| p.exists())
+                .map(|p| p.clone());
+
+            if let Some(ref backend_exe) = bundled_backend {
+                log::info!("Found bundled backend: {:?}", backend_exe);
+                
+                let child = Command::new(backend_exe)
+                    .env("NANKI_PORT", "8642")
+                    .env("PYTHONUNBUFFERED", "1")
+                    .current_dir(backend_exe.parent().unwrap_or(std::path::Path::new(".")))
+                    .stdout(std::process::Stdio::piped())
+                    .stderr(std::process::Stdio::piped())
+                    .spawn();
+
+                match child {
+                    Ok(c) => {
+                        app.manage(AppState {
+                            backend: Mutex::new(BackendState { child: Some(c) }),
+                        });
+                        log::info!("Waiting for bundled backend to become ready...");
+                        let ready = wait_for_backend(60, 500);
+                        if ready {
+                            log::info!("Backend is ready on port 8642");
+                        } else {
+                            log::error!("Bundled backend failed to start within 30 seconds");
+                        }
+                    }
+                    Err(e) => {
+                        log::error!("Failed to start bundled backend: {}", e);
+                        app.manage(AppState {
+                            backend: Mutex::new(BackendState { child: None }),
+                        });
+                    }
+                }
+                return Ok(());
+            }
+
+            log::info!("No bundled backend found, falling back to Python interpreter");
+
+            // Fallback to Python interpreter (development mode)
             #[cfg(windows)]
             let python_candidates = vec!["py", "python", "python3", "python3.12", "python3.11", "python3.13"];
             #[cfg(not(windows))]
@@ -95,10 +158,14 @@ pub fn run() {
                 .map(|s| s.to_string());
 
             let python = match python {
-                Some(p) => p,
+                Some(p) => {
+                    log::info!("Found Python interpreter: {}", p);
+                    p
+                },
                 None => {
                     log::error!("Python interpreter not found. Attempted: {:?}", python_candidates);
                     log::error!("Please install Python 3.11+ and add it to PATH.");
+                    log::error!("Alternatively, build the bundled backend with PyInstaller.");
                     app.manage(AppState {
                         backend: Mutex::new(BackendState { child: None }),
                     });
@@ -107,10 +174,6 @@ pub fn run() {
             };
 
             // Resolve backend path: try multiple strategies for portability
-            let exe_path = std::env::current_exe().unwrap_or_else(|_| ".".into());
-            let exe_dir = exe_path.parent().unwrap_or(std::path::Path::new("."));
-            let resources_dir = app.handle().path().resource_dir().unwrap_or_else(|_| exe_dir.to_path_buf());
-            
             #[cfg(windows)]
             let possible_paths = vec![
                 // Installed app paths (resources/ dir)
@@ -118,8 +181,6 @@ pub fn run() {
                 // Developer mode: relative to executable
                 exe_dir.join("backend").join("python-core").join("run.py"),
                 exe_dir.join("..").join("..").join("..").join("backend").join("python-core").join("run.py"),
-                // Absolute fallback
-                std::path::PathBuf::from("C:\\nanki\\backend\\python-core\\run.py"),
             ];
             
             #[cfg(target_os = "macos")]
@@ -154,7 +215,7 @@ pub fn run() {
             let backend_dir = backend_script.parent().unwrap_or(std::path::Path::new("."));
 
             let child = Command::new(&python)
-                .args(["-u", backend_script.to_str().unwrap_or("")])  // -u for unbuffered output
+                .args(["-u", backend_script.to_str().unwrap_or("")])
                 .env("NANKI_PORT", "8642")
                 .env("PYTHONUNBUFFERED", "1")
                 .current_dir(backend_dir)
@@ -191,4 +252,3 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![backend_status])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
-}
