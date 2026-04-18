@@ -1,3 +1,4 @@
+use std::io::{BufRead, BufReader};
 use std::process::{Command, Child};
 use std::sync::Mutex;
 use std::thread;
@@ -65,6 +66,30 @@ fn wait_for_backend(max_retries: u32, interval_ms: u64) -> bool {
     false
 }
 
+fn spawn_output_threads(mut child: Child) -> Child {
+    if let Some(stdout) = child.stdout.take() {
+        thread::spawn(move || {
+            let reader = BufReader::new(stdout);
+            for line in reader.lines() {
+                if let Ok(line) = line {
+                    log::info!("[backend stdout] {}", line);
+                }
+            }
+        });
+    }
+    if let Some(stderr) = child.stderr.take() {
+        thread::spawn(move || {
+            let reader = BufReader::new(stderr);
+            for line in reader.lines() {
+                if let Ok(line) = line {
+                    log::info!("[backend stderr] {}", line);
+                }
+            }
+        });
+    }
+    child
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -113,8 +138,21 @@ pub fn run() {
             ];
 
             #[cfg(not(windows))]
-            let bundled_backend_candidates =
-                vec![exe_dir.join("nanki-backend"), resources_dir.join("nanki-backend")];
+            let bundled_backend_candidates = vec![
+                exe_dir.join("nanki-backend"),
+                exe_dir.join("nanki-backend-aarch64-apple-darwin"),
+                resources_dir.join("nanki-backend"),
+                resources_dir.join("nanki-backend-aarch64-apple-darwin"),
+            ];
+
+            // Log all candidates being checked
+            for candidate in &bundled_backend_candidates {
+                log::info!(
+                    "Checking backend candidate: {} - exists: {}",
+                    candidate.display(),
+                    candidate.exists()
+                );
+            }
 
             let bundled_backend = bundled_backend_candidates
                 .iter()
@@ -138,8 +176,19 @@ pub fn run() {
 
                 match child {
                     Ok(c) => {
+                        let pid = c.id();
+                        log::info!(
+                            "Bundled backend spawned with PID: {}",
+                            pid
+                        );
+
+                        // Spawn threads to capture output
+                        let managed_child = spawn_output_threads(c);
+
                         app.manage(AppState {
-                            backend: Mutex::new(BackendState { child: Some(c) }),
+                            backend: Mutex::new(BackendState {
+                                child: Some(managed_child),
+                            }),
                         });
                         log::info!("Waiting for bundled backend to become ready...");
                         let ready = wait_for_backend(60, 500);
@@ -263,8 +312,16 @@ pub fn run() {
 
             match child {
                 Ok(c) => {
+                    let pid = c.id();
+                    log::info!("Python backend spawned with PID: {}", pid);
+
+                    // Spawn threads to capture output
+                    let managed_child = spawn_output_threads(c);
+
                     app.manage(AppState {
-                        backend: Mutex::new(BackendState { child: Some(c) }),
+                        backend: Mutex::new(BackendState {
+                            child: Some(managed_child),
+                        }),
                     });
                     log::info!("Waiting for backend to become ready...");
                     let ready = wait_for_backend(60, 500);
