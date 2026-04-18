@@ -132,12 +132,12 @@ jobs:
             --hidden-import nanki_core.models \
             --hidden-import nanki_core.prompts \
             --hidden-import nanki_core.storage \
-            --hidden-import fitz \
-            --hidden-import markdownify \
-            --hidden-import mistune \
-            --hidden-import openai \
-            --hidden-import tiktoken \
-            --hidden-import anki \
+            --collect-all fitz \
+            --collect-all markdownify \
+            --collect-all mistune \
+            --collect-all openai \
+            --collect-all tiktoken \
+            --collect-all anki \
             --collect-all nanki_core \
             --collect-all fastapi \
             --collect-all uvicorn \
@@ -187,12 +187,12 @@ jobs:
             --hidden-import nanki_core.models \
             --hidden-import nanki_core.prompts \
             --hidden-import nanki_core.storage \
-            --hidden-import fitz \
-            --hidden-import markdownify \
-            --hidden-import mistune \
-            --hidden-import openai \
-            --hidden-import tiktoken \
-            --hidden-import anki \
+            --collect-all fitz \
+            --collect-all markdownify \
+            --collect-all mistune \
+            --collect-all openai \
+            --collect-all tiktoken \
+            --collect-all anki \
             --collect-all nanki_core \
             --collect-all fastapi \
             --collect-all uvicorn \
