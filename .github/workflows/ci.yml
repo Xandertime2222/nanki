@@ -170,9 +170,9 @@ jobs:
           $exe = "binaries/nanki-backend-x86_64-pc-windows-msvc.exe"
           if (Test-Path $exe) {
             Write-Host "Backend executable exists: $((Get-Item $exe).Length) bytes"
-            # Try to run it with --version or check if it's a valid PE
-            $sig = Get-Content $exe -Encoding Byte -TotalCount 2
-            if ($sig[0] -eq 0x4D -and $sig[1] -eq 0x5A) {
+            # Check if it's a valid Windows executable (MZ header)
+            $bytes = [System.IO.File]::ReadAllBytes($exe)
+            if ($bytes[0] -eq 0x4D -and $bytes[1] -eq 0x5A) {
               Write-Host "Valid Windows executable (MZ header found)"
             } else {
               Write-Error "Invalid executable format"
