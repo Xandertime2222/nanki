@@ -94,13 +94,22 @@ fn spawn_output_threads(mut child: Child) -> Child {
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
-            if cfg!(debug_assertions) {
-                app.handle().plugin(
-                    tauri_plugin_log::Builder::default()
-                        .level(log::LevelFilter::Info)
-                        .build(),
-                )?;
-            }
+            // Always enable logging to file for debugging
+            let log_dir = app
+                .path()
+                .app_log_dir()
+                .unwrap_or_else(|_| std::path::PathBuf::from("."));
+            std::fs::create_dir_all(&log_dir).ok();
+            log::info!("Log directory: {:?}", log_dir);
+
+            app.handle().plugin(
+                tauri_plugin_log::Builder::default()
+                    .level(log::LevelFilter::Info)
+                    .target(tauri_plugin_log::Target::new(
+                        tauri_plugin_log::TargetKind::LogDir { file_name: None },
+                    ))
+                    .build(),
+            )?;
 
             app.handle().plugin(tauri_plugin_shell::init())?;
 
