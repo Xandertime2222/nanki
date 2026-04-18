@@ -108,7 +108,26 @@ jobs:
           python-version: "3.13"
       - run: pip install -r requirements.txt pyinstaller
       - name: Build backend executable
-        run: pyinstaller --onefile --name nanki-backend run.py
+        run: |
+          pyinstaller --onefile --name nanki-backend \
+            --hidden-import nanki_core \
+            --hidden-import nanki_core.app \
+            --hidden-import nanki_core.routes.health \
+            --hidden-import nanki_core.routes.notes \
+            --hidden-import nanki_core.routes.cards \
+            --hidden-import nanki_core.routes.settings \
+            --hidden-import nanki_core.routes.import_routes \
+            --hidden-import nanki_core.routes.anki \
+            --hidden-import nanki_core.routes.ai \
+            --hidden-import nanki_core.routes.coverage \
+            --hidden-import nanki_core.routes.render \
+            --collect-all nanki_core \
+            --collect-all fastapi \
+            --collect-all uvicorn \
+            --collect-all starlette \
+            --collect-all pydantic \
+            --collect-all httpx \
+            run.py
       - name: Upload backend executable
         uses: actions/upload-artifact@v4
         with:
@@ -128,7 +147,26 @@ jobs:
           python-version: "3.13"
       - run: pip install -r requirements.txt pyinstaller
       - name: Build backend executable
-        run: pyinstaller --onefile --name nanki-backend run.py
+        run: |
+          pyinstaller --onefile --name nanki-backend \
+            --hidden-import nanki_core \
+            --hidden-import nanki_core.app \
+            --hidden-import nanki_core.routes.health \
+            --hidden-import nanki_core.routes.notes \
+            --hidden-import nanki_core.routes.cards \
+            --hidden-import nanki_core.routes.settings \
+            --hidden-import nanki_core.routes.import_routes \
+            --hidden-import nanki_core.routes.anki \
+            --hidden-import nanki_core.routes.ai \
+            --hidden-import nanki_core.routes.coverage \
+            --hidden-import nanki_core.routes.render \
+            --collect-all nanki_core \
+            --collect-all fastapi \
+            --collect-all uvicorn \
+            --collect-all starlette \
+            --collect-all pydantic \
+            --collect-all httpx \
+            run.py
       - name: Upload backend executable
         uses: actions/upload-artifact@v4
         with:
