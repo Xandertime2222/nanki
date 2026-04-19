@@ -66,7 +66,7 @@ export const api = {
   getAiModels: () => request("/api/ai/models"),
   aiChat: (data) => request("/api/ai/chat", { method: "POST", body: JSON.stringify(data) }),
   aiExplain: (data) => request("/api/ai/explain", { method: "POST", body: JSON.stringify(data) }),
-  generateCards: (noteId, data) => request(`/api/ai/generate-cards?note_id=${noteId}`, { method: "POST", body: JSON.stringify(data) }),
+  generateCards: (noteId, data) => request(`/api/ai/generate-cards?note_id=${noteId}`, { method: "POST", body: JSON.stringify({ ...data, note_id: noteId }) }),
   aiSuggestCardsForGaps: (data) => request("/api/ai/suggest-cards-for-gaps", { method: "POST", body: JSON.stringify(data) }),
   
   // Anki Push
@@ -78,7 +78,7 @@ export const api = {
   },
   
   // Coverage
-  getCoverage: (noteId, mode = "apcg") => request(`/api/notes/${noteId}/coverage?mode=${mode}`),
+  getCoverage: (noteId, mode = "auto") => request(`/api/notes/${noteId}/coverage?mode=${mode}`),
   getCoverageSummary: (noteId) => request(`/api/notes/${noteId}/coverage/summary`),
   postCoverageApcg: (noteId, data) => request(`/api/notes/${noteId}/coverage/apcg`, { method: "POST", body: JSON.stringify(data) }),
 

@@ -6,7 +6,6 @@ import { WorkspaceView } from "../features/workspace/workspace-view";
 import { ImportView } from "../features/import/import-view";
 import { LibraryView } from "../features/library/library-view";
 import { AnalysisView } from "../features/analysis/analysis-view";
-import { ReviewView } from "../features/review/review-view";
 import { SettingsView } from "../features/settings/settings-view";
 import { EditorView } from "../features/editor/editor-view";
 import { motion, AnimatePresence } from "framer-motion";
@@ -17,7 +16,6 @@ const views = {
   import: ImportView,
   library: LibraryView,
   analysis: AnalysisView,
-  review: ReviewView,
   settings: SettingsView,
 };
 
@@ -28,7 +26,7 @@ export function AppShell() {
   return (
     <div className="flex h-screen w-screen overflow-hidden" data-testid="app-shell">
       <AppSidebar />
-      <main className="flex-1 overflow-auto bg-background">
+      <main className="flex-1 overflow-hidden bg-background flex flex-col">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeView}
@@ -36,6 +34,7 @@ export function AppShell() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.15 }}
+            className="flex-1 flex flex-col h-full"
           >
             <ActiveView />
           </motion.div>

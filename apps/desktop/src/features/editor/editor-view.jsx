@@ -4,6 +4,8 @@ import { Badge } from "../../components/ui/badge";
 import { useAppStore } from "../../stores/app-store";
 import { useNotesStore } from "../../stores/notes-store";
 import { useCardsStore } from "../../stores/cards-store";
+import { ObsidianEditor } from "../../components/obsidian-editor";
+import { useTheme } from "../../components/theme-provider";
 import {
   Edit3, Save, Trash2, Plus, Sparkles, FileText, Tag, Layers,
   Bold, Italic, Heading1, Heading2, Heading3, List, Quote, Code,
@@ -53,64 +55,71 @@ function QuickCardDock({ noteId, deck, onSave, onSaveAndPush }) {
   const hasContent = front.trim() || back.trim();
 
   return (
-    <div className="border-t bg-muted/20 p-3 space-y-3">
+    <div className="border-t bg-muted/20 p-3">
       <div className="flex items-center justify-between">
-        <div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 p-0"
+            onClick={() => setExpanded(!expanded)}
+          >
+            {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+          </Button>
           <span className="text-sm font-medium">Quick Card</span>
-          <span className="text-xs text-muted-foreground ml-2">
-            {hasContent ? "Ready to save" : "Select text or type here"}
-          </span>
+          {hasContent && <span className="text-xs text-muted-foreground">Ready to save</span>}
         </div>
         <div className="flex gap-1">
-          <Button variant="ghost" size="sm" onClick={() => setExpanded(!expanded)}>
-            Details
-          </Button>
           <Button variant="ghost" size="sm" onClick={() => { setFront(""); setBack(""); }}>
             Clear
           </Button>
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-2">
-        <div>
-          <label className="text-xs text-muted-foreground">Front</label>
-          <textarea
-            value={front}
-            onChange={(e) => setFront(e.target.value)}
-            className="w-full h-16 px-2 py-1 border rounded text-sm resize-none bg-background"
-            placeholder="Front side..."
-          />
+      {expanded && (
+        <div className="mt-3 space-y-3">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs text-muted-foreground">Front</label>
+              <textarea
+                value={front}
+                onChange={(e) => setFront(e.target.value)}
+                className="w-full h-16 px-2 py-1 border rounded text-sm resize-none bg-background"
+                placeholder="Front side..."
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Back</label>
+              <textarea
+                value={back}
+                onChange={(e) => setBack(e.target.value)}
+                className="w-full h-16 px-2 py-1 border rounded text-sm resize-none bg-background"
+                placeholder="Back side..."
+              />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" className="flex-1" disabled={!front.trim() || !noteId} onClick={() => onSave({ front, back, deck })}>
+              Save Card
+            </Button>
+            <Button variant="outline" size="sm" disabled={!front.trim() || !noteId} onClick={() => onSaveAndPush({ front, back, deck })}>
+              Save & Push
+            </Button>
+          </div>
         </div>
-        <div>
-          <label className="text-xs text-muted-foreground">Back</label>
-          <textarea
-            value={back}
-            onChange={(e) => setBack(e.target.value)}
-            className="w-full h-16 px-2 py-1 border rounded text-sm resize-none bg-background"
-            placeholder="Back side..."
-          />
-        </div>
-      </div>
-      <div className="flex gap-2">
-        <Button size="sm" className="flex-1" disabled={!front.trim() || !noteId} onClick={() => onSave({ front, back, deck })}>
-          Save Card
-        </Button>
-        <Button variant="outline" size="sm" disabled={!front.trim() || !noteId} onClick={() => onSaveAndPush({ front, back, deck })}>
-          Save & Push
-        </Button>
-      </div>
+      )}
     </div>
   );
 }
 
 // Selection Bubble component
-function SelectionBubble({ selection, onBasic, onCloze, onFront, onBack }) {
+function SelectionBubble({ selection, onBasic, onCloze, onFront, onBack, onAiChat, onAiExplain }) {
   const bubbleRef = useRef(null);
   const [position, setPosition] = useState({ left: 0, top: 0 });
 
   useEffect(() => {
     if (selection?.rect) {
       const rect = selection.rect;
-      const bubbleWidth = 320;
+      const bubbleWidth = 420;
       const bubbleHeight = 48;
       let left = rect.left + rect.width / 2 - bubbleWidth / 2;
       left = Math.max(8, Math.min(window.innerWidth - bubbleWidth - 8, left));
@@ -139,6 +148,13 @@ function SelectionBubble({ selection, onBasic, onCloze, onFront, onBack }) {
       </Button>
       <Button size="sm" variant="ghost" className="text-white hover:bg-white/10 h-7 px-2 text-xs" onClick={onBack}>
         To Back
+      </Button>
+      <div className="w-px bg-white/20 mx-1" />
+      <Button size="sm" variant="ghost" className="text-white hover:bg-white/10 h-7 px-2 text-xs" onClick={onAiChat}>
+        AI Chat
+      </Button>
+      <Button size="sm" variant="ghost" className="text-white hover:bg-white/10 h-7 px-2 text-xs" onClick={onAiExplain}>
+        Explain
       </Button>
     </div>
   );
@@ -195,17 +211,19 @@ export function EditorView() {
   const [newCardExtra, setNewCardExtra] = useState("");
   const [newCardSourceLocator, setNewCardSourceLocator] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
-  const [theme, setTheme] = useState("auto");
   const [selection, setSelection] = useState(null);
+  // Theme
+  const { theme, setTheme } = useTheme();
   const [showSource, setShowSource] = useState(false);
   const [showAiPanel, setShowAiPanel] = useState(false);
   const [aiMode, setAiMode] = useState("chat");
   const [showPreview, setShowPreview] = useState(false);
   const [coverageView, setCoverageView] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [coverageReport, setCoverageReport] = useState(null);
   const [coverageLoading, setCoverageLoading] = useState(false);
   const [noteSource, setNoteSource] = useState(null);
-  const editorRef = useRef(null);
+  const editorCommandsRef = useRef(null);
   const chatEndRef = useRef(null);
   const saveTimerRef = useRef(null);
   const [wordCount, setWordCount] = useState(0);
@@ -423,33 +441,22 @@ export function EditorView() {
   };
 
   const handleFormat = (type) => {
-    const textarea = editorRef.current;
-    if (!textarea) return;
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const selected = content.slice(start, end);
-    let replacement = "";
-    let cursorOffset = 0;
+    const commands = editorCommandsRef.current;
+    if (!commands) return;
+
+    const selected = commands.getSelection();
 
     switch (type) {
-      case "bold": replacement = `**${selected || "bold"}**`; cursorOffset = selected ? 0 : 2; break;
-      case "italic": replacement = `*${selected || "italic"}*`; cursorOffset = selected ? 0 : 1; break;
-      case "h1": replacement = `# ${selected || "Heading"}`; break;
-      case "h2": replacement = `## ${selected || "Heading"}`; break;
-      case "h3": replacement = `### ${selected || "Heading"}`; break;
-      case "ul": replacement = `- ${selected || "Item"}`; break;
-      case "quote": replacement = `> ${selected || "Quote"}`; break;
-      case "code": replacement = `\`${selected || "code"}\``; cursorOffset = selected ? 0 : 1; break;
-      case "clear": replacement = selected; break;
+      case "bold": commands.wrapText("**"); break;
+      case "italic": commands.wrapText("*"); break;
+      case "h1": commands.insertText(`# ${selected || "Heading"}\n`); break;
+      case "h2": commands.insertText(`## ${selected || "Heading"}\n`); break;
+      case "h3": commands.insertText(`### ${selected || "Heading"}\n`); break;
+      case "ul": commands.insertText(`- ${selected || "Item"}\n`); break;
+      case "quote": commands.insertText(`> ${selected || "Quote"}\n`); break;
+      case "code": commands.wrapText("`"); break;
+      case "clear": break;
     }
-
-    const newContent = content.slice(0, start) + replacement + content.slice(end);
-    setContent(newContent);
-    setTimeout(() => {
-      textarea.focus();
-      const newPos = selected ? end : start + cursorOffset;
-      textarea.setSelectionRange(newPos, newPos + (selected ? selected.length : replacement.length - cursorOffset * 2));
-    }, 0);
   };
 
   const handleAddCard = async () => {
@@ -587,15 +594,6 @@ export function EditorView() {
     setAiProcessing(false);
   };
 
-  // Theme cycle
-  const cycleTheme = () => {
-    const themes = ["auto", "light", "dark"];
-    const next = themes[(themes.indexOf(theme) + 1) % themes.length];
-    setTheme(next);
-    document.documentElement.setAttribute("data-theme", next);
-    localStorage.setItem("nanki.theme", next);
-  };
-
   // Filter notes
   const filteredNotes = notes.filter((note) => {
     if (!searchTerm) return true;
@@ -610,81 +608,98 @@ export function EditorView() {
   });
 
   return (
-    <div className="flex h-full" data-testid="editor-view">
+    <div className="flex h-full overflow-hidden" data-testid="editor-view">
       {/* Sidebar */}
-      <aside className="w-64 border-r bg-muted/30 flex flex-col">
-        <div className="p-3 border-b">
-          <div className="flex items-center gap-2 mb-2">
-            <FileText className="h-4 w-4" />
-            <span className="font-semibold">Notes ({filteredNotes.length})</span>
-          </div>
-          <div className="flex gap-1">
-            <Button variant="outline" size="sm" className="flex-1" onClick={handleCreateNote}>
-              <Plus className="h-3 w-3 mr-1" /> New
-            </Button>
-            {showSearch ? (
-              <Button variant="ghost" size="sm" onClick={() => setShowSearch(false)}>✕</Button>
-            ) : (
-              <Button variant="ghost" size="sm" onClick={() => setShowSearch(true)}>
-                <Search className="h-3 w-3" />
-              </Button>
-            )}
-          </div>
-          {showSearch && (
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search notes..."
-              className="w-full mt-2 px-2 py-1 text-sm border rounded bg-background"
-            />
+      <aside className={`border-r bg-muted/30 flex flex-col transition-all duration-200 ${sidebarCollapsed ? 'w-10' : 'w-64'}`}>
+        <div className="p-2 border-b flex items-center justify-between">
+          {!sidebarCollapsed && (
+            <div className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              <span className="font-semibold text-sm">Notes ({filteredNotes.length})</span>
+            </div>
           )}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 p-0"
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {sidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </Button>
         </div>
-        <div className="flex-1 overflow-y-auto p-2 space-y-1">
-          {filteredNotes.map((note) => (
-            <Button
-              key={note.meta.id}
-              variant={noteId === note.meta.id ? "secondary" : "ghost"}
-              className="w-full justify-start text-left h-auto py-2"
-              onClick={() => setNoteId(note.meta.id)}
-            >
-              <div className="min-w-0 flex-1">
-                <div className="font-medium truncate">{note.meta.title || "Untitled"}</div>
-                <div className="text-xs text-muted-foreground flex gap-2">
-                  <span>{note.card_count || 0} cards</span>
-                  <span>{note.word_count || 0} words</span>
-                </div>
-                {note.meta.tags?.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {note.meta.tags.slice(0, 3).map((tag) => (
-                      <Badge key={tag} variant="outline" className="text-xs py-0 h-4">{tag}</Badge>
-                    ))}
-                  </div>
+        {!sidebarCollapsed && (
+          <>
+            <div className="p-3 border-b">
+              <div className="flex gap-1">
+                <Button variant="outline" size="sm" className="flex-1" onClick={handleCreateNote}>
+                  <Plus className="h-3 w-3 mr-1" /> New
+                </Button>
+                {showSearch ? (
+                  <Button variant="ghost" size="sm" onClick={() => setShowSearch(false)}>✕</Button>
+                ) : (
+                  <Button variant="ghost" size="sm" onClick={() => setShowSearch(true)}>
+                    <Search className="h-3 w-3" />
+                  </Button>
                 )}
               </div>
-              {note.meta.pinned && <Badge variant="secondary" className="ml-1 text-xs">📌</Badge>}
-            </Button>
-          ))}
-          {filteredNotes.length === 0 && (
-            <p className="text-sm text-muted-foreground p-2 text-center">
-              {searchTerm ? "No matches" : "No notes yet"}
-            </p>
-          )}
-        </div>
-        <div className="p-2 border-t flex gap-1">
-          <Button variant="ghost" size="sm" className="flex-1" onClick={handleDuplicateNote} disabled={!noteId}>
-            <Copy className="h-3 w-3 mr-1" /> Duplicate
-          </Button>
-          <Button variant="ghost" size="sm" className="flex-1 text-red-500" onClick={handleDeleteNote} disabled={!noteId}>
-            <Trash2 className="h-3 w-3 mr-1" /> Delete
-          </Button>
-        </div>
+              {showSearch && (
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Search notes..."
+                  className="w-full mt-2 px-2 py-1 text-sm border rounded bg-background"
+                />
+              )}
+            </div>
+            <div className="flex-1 overflow-y-auto p-2 space-y-1 min-h-0">
+              {filteredNotes.map((note) => (
+                <Button
+                  key={note.meta.id}
+                  variant={noteId === note.meta.id ? "secondary" : "ghost"}
+                  className="w-full justify-start text-left h-auto py-2"
+                  onClick={() => setNoteId(note.meta.id)}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium truncate text-sm">{note.meta.title || "Untitled"}</div>
+                    <div className="text-xs text-muted-foreground flex gap-2">
+                      <span>{note.card_count || 0} cards</span>
+                      <span>{note.word_count || 0} words</span>
+                    </div>
+                    {note.meta.tags?.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {note.meta.tags.slice(0, 3).map((tag) => (
+                          <Badge key={tag} variant="outline" className="text-xs py-0 h-4">{tag}</Badge>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {note.meta.pinned && <Badge variant="secondary" className="ml-1 text-xs">📌</Badge>}
+                </Button>
+              ))}
+              {filteredNotes.length === 0 && (
+                <p className="text-sm text-muted-foreground p-2 text-center">
+                  {searchTerm ? "No matches" : "No notes yet"}
+                </p>
+              )}
+            </div>
+            <div className="p-2 border-t flex gap-1">
+              <Button variant="ghost" size="sm" className="flex-1" onClick={handleDuplicateNote} disabled={!noteId}>
+                <Copy className="h-3 w-3 mr-1" /> Duplicate
+              </Button>
+              <Button variant="ghost" size="sm" className="flex-1 text-red-500" onClick={handleDeleteNote} disabled={!noteId}>
+                <Trash2 className="h-3 w-3 mr-1" /> Delete
+              </Button>
+            </div>
+          </>
+        )}
       </aside>
 
       {/* Main Editor */}
-      <main className="flex-1 flex flex-col min-w-0">
+      <main className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
         {noteId ? (
-          <>
+          <div className="flex flex-col h-full min-h-0">
             {/* Toolbar */}
             <header className="border-b p-3 flex items-center gap-3 bg-background">
               <input
@@ -696,7 +711,11 @@ export function EditorView() {
               />
               <div className="flex items-center gap-2">
                 {/* Theme Toggle */}
-                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={cycleTheme} title={`Theme: ${theme}`}>
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => {
+                  const themes = ["system", "light", "dark"];
+                  const next = themes[(themes.indexOf(theme) + 1) % themes.length];
+                  setTheme(next);
+                }} title={`Theme: ${theme}`}>
                   {theme === "light" ? <Sun className="h-3.5 w-3.5" /> :
                    theme === "dark" ? <Moon className="h-3.5 w-3.5" /> :
                    <Monitor className="h-3.5 w-3.5" />}
@@ -790,7 +809,7 @@ export function EditorView() {
             <div className="flex-1 flex min-h-0">
               {coverageView && coverageReport ? (
                 // Coverage View
-                <div className="flex-1 p-4 overflow-auto">
+                <div className="flex-1 p-4 overflow-auto min-h-0">
                   <div className="max-w-3xl mx-auto space-y-4">
                     <div className="flex items-center justify-between">
                       <h3 className="text-lg font-semibold">Coverage Analysis</h3>
@@ -845,16 +864,14 @@ export function EditorView() {
                 </div>
               ) : showPreview ? (
                 // Split Preview
-                <div className="flex-1 flex min-h-0">
+                <div className="flex-1 flex min-h-0 overflow-hidden">
                   <div className="flex-1 flex flex-col min-h-0">
-                    <textarea
-                      ref={editorRef}
+                    <ObsidianEditor
                       value={content}
-                      onChange={(e) => { setContent(e.target.value); scheduleSave(); }}
-                      onSelect={handleEditorSelect}
-                      onMouseUp={handleEditorSelect}
+                      onChange={(newContent) => { setContent(newContent); scheduleSave(); }}
+                      onSelect={setSelection}
                       placeholder="Write your notes here... Markdown supported"
-                      className="flex-1 w-full resize-none border-none outline-none bg-transparent font-mono text-sm p-4"
+                      commandsRef={editorCommandsRef}
                     />
                   </div>
                   <div className="w-px border-l bg-border" />
@@ -867,15 +884,13 @@ export function EditorView() {
                 </div>
               ) : (
                 // Editor
-                <div className="flex-1 flex flex-col min-h-0">
-                  <textarea
-                    ref={editorRef}
+                <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                  <ObsidianEditor
                     value={content}
-                    onChange={(e) => { setContent(e.target.value); scheduleSave(); }}
-                    onSelect={handleEditorSelect}
-                    onMouseUp={handleEditorSelect}
+                    onChange={(newContent) => { setContent(newContent); scheduleSave(); }}
+                    onSelect={setSelection}
                     placeholder="Write your notes here... Markdown supported"
-                    className="flex-1 w-full resize-none border-none outline-none bg-transparent font-mono text-sm p-4"
+                    commandsRef={editorCommandsRef}
                   />
                 </div>
               )}
@@ -1170,7 +1185,7 @@ export function EditorView() {
                 }
               }}
             />
-          </>
+          </div>
         ) : (
           <div className="flex-1 flex items-center justify-center bg-background">
             <div className="text-center max-w-md p-8">
@@ -1196,6 +1211,19 @@ export function EditorView() {
         onCloze={() => applySelectionToDrawer("cloze")}
         onFront={() => applySelectionToDrawer("front")}
         onBack={() => applySelectionToDrawer("back")}
+        onAiChat={() => {
+          setShowAiPanel(true);
+          setAiMode("chat");
+          setAiInput(`Explain this: "${selection?.text?.slice(0, 200)}"`);
+          setSelection(null);
+        }}
+        onAiExplain={() => {
+          setShowAiPanel(true);
+          setAiMode("explain");
+          setAiExplainContext(selection?.text?.slice(0, 1000) || "");
+          setAiExplainInstructions("");
+          setSelection(null);
+        }}
       />
     </div>
   );

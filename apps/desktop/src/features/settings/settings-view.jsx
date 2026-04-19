@@ -16,28 +16,29 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../lib/api";
+import { useTheme } from "../../components/theme-provider";
 
 export function SettingsView() {
   const [settings, setSettings] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  
+
   // Connection states
   const [testingAnki, setTestingAnki] = useState(false);
   const [ankiStatus, setAnkiStatus] = useState(null);
   const [ankiDecks, setAnkiDecks] = useState([]);
   const [ankiModels, setAnkiModels] = useState([]);
-  
+
   const [testingAi, setTestingAi] = useState(false);
   const [aiStatus, setAiStatus] = useState(null);
   const [aiModels, setAiModels] = useState([]);
-  
+
   // Update checker
   const [updateInfo, setUpdateInfo] = useState(null);
   const [checkingUpdate, setCheckingUpdate] = useState(false);
-  
+
   // Theme
-  const [theme, setTheme] = useState(() => localStorage.getItem("nanki.theme") || "auto");
+  const { theme, setTheme } = useTheme();
 
   const loadSettings = useCallback(async () => {
     setLoading(true);
@@ -58,18 +59,6 @@ export function SettingsView() {
     loadSettings();
     checkForUpdates();
   }, [loadSettings]);
-
-  // Apply theme
-  useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-    localStorage.setItem("nanki.theme", theme);
-  }, [theme]);
-
-  const cycleTheme = () => {
-    const themes = ["auto", "light", "dark"];
-    const next = themes[(themes.indexOf(theme) + 1) % themes.length];
-    setTheme(next);
-  };
 
   const checkForUpdates = async () => {
     try {
@@ -218,7 +207,11 @@ export function SettingsView() {
         </div>
         <div className="flex items-center gap-2">
           {/* Theme Toggle */}
-          <Button variant="ghost" size="icon" onClick={cycleTheme} title={`Theme: ${theme}`}>
+          <Button variant="ghost" size="icon" onClick={() => {
+            const themes = ["system", "light", "dark"];
+            const next = themes[(themes.indexOf(theme) + 1) % themes.length];
+            setTheme(next);
+          }} title={`Theme: ${theme}`}>
             {theme === "light" ? <Sun className="h-4 w-4" /> :
              theme === "dark" ? <Moon className="h-4 w-4" /> :
              <Monitor className="h-4 w-4" />}

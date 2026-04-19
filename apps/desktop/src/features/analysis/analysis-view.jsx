@@ -15,7 +15,7 @@ export function AnalysisView() {
   const [coverage, setCoverage] = useState(null);
   const [loading, setLoading] = useState(false);
   const [loadingCoverage, setLoadingCoverage] = useState(false);
-  const [coverageMode, setCoverageMode] = useState("apcg");
+  const [coverageMode, setCoverageMode] = useState("auto");
   const [generatingCards, setGeneratingCards] = useState(false);
 
   useEffect(() => {
@@ -145,7 +145,7 @@ export function AnalysisView() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="apcg">APCG (Auto)</SelectItem>
+                    <SelectItem value="auto">Auto-detect</SelectItem>
                     <SelectItem value="history">History / Geography</SelectItem>
                     <SelectItem value="science">Science / Medicine</SelectItem>
                     <SelectItem value="vocabulary">Vocabulary</SelectItem>

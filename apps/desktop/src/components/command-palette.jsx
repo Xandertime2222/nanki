@@ -6,7 +6,6 @@ import {
   Upload,
   Library,
   BarChart3,
-  CheckSquare,
   Settings,
 } from "lucide-react";
 
@@ -15,7 +14,6 @@ const commands = [
   { id: "import", label: "Go to Import", icon: Upload, view: "import" },
   { id: "library", label: "Go to Library", icon: Library, view: "library" },
   { id: "analysis", label: "Go to Analysis", icon: BarChart3, view: "analysis" },
-  { id: "review", label: "Go to Review", icon: CheckSquare, view: "review" },
   { id: "settings", label: "Go to Settings", icon: Settings, view: "settings" },
 ];
 

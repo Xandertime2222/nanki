@@ -5,7 +5,6 @@ import {
   Upload,
   Library,
   BarChart3,
-  CheckSquare,
   Settings,
   ChevronLeft,
   ChevronRight,
@@ -19,7 +18,6 @@ const navItems = [
   { id: "import", label: "Import", icon: Upload },
   { id: "library", label: "Library", icon: Library },
   { id: "analysis", label: "Analysis", icon: BarChart3 },
-  { id: "review", label: "Review", icon: CheckSquare },
   { id: "settings", label: "Settings", icon: Settings },
 ];
 

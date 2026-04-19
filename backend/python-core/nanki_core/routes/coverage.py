@@ -19,29 +19,31 @@ store = WorkspaceStore(settings_manager)
 
 
 class APCGRequest(BaseModel):
-    mode: str = "apcg"
+    mode: str = "auto"
 
 
 @router.get("")
-async def get_coverage(note_id: str, mode: str = "apcg") -> dict:
+async def get_coverage(note_id: str, mode: str = "auto") -> dict:
     """Get coverage analysis for a note."""
     try:
         note = store.load_note(note_id)
 
-        if mode == "apcg":
-            config = CoverageConfig(
-                mode=CoverageMode(mode),
-                include_anki_cards=settings_manager.load().apcg.include_anki_cards,
-            )
-            result = apcg_coverage(note, config)
-            html = generate_coverage_html(note, result)
+        # Validate mode against CoverageMode enum values
+        valid_modes = [m.value for m in CoverageMode]
+        if mode not in valid_modes:
+            raise HTTPException(status_code=400, detail=f"Unknown mode: {mode}. Valid modes: {valid_modes}")
 
-            return {
-                "coverage": result.model_dump(),
-                "html": html,
-            }
-        else:
-            raise HTTPException(status_code=400, detail=f"Unknown mode: {mode}")
+        config = CoverageConfig(
+            mode=CoverageMode(mode),
+            include_anki_cards=settings_manager.load().apcg.include_anki_cards,
+        )
+        result = apcg_coverage(note, config)
+        html = generate_coverage_html(note, result)
+
+        return {
+            "coverage": result.model_dump(),
+            "html": html,
+        }
 
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
