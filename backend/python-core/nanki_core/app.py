@@ -11,6 +11,7 @@ from .routes.anki import router as anki_router
 from .routes.ai import router as ai_router
 from .routes.coverage import router as coverage_router
 from .routes.render import router as render_router
+from .routes.quiz import router as quiz_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -38,5 +39,6 @@ app.include_router(anki_router)
 app.include_router(ai_router)
 app.include_router(coverage_router)
 app.include_router(render_router)
+app.include_router(quiz_router)
 
 logger.info("Nanki Core API initialized with all endpoints")

@@ -21,7 +21,6 @@ export const api = {
   updateSettings: (data) => request("/api/settings", { method: "PUT", body: JSON.stringify(data) }),
   getState: () => request("/api/state"),
   updateState: (data) => request("/api/state", { method: "PUT", body: JSON.stringify(data) }),
-  checkUpdates: () => request("/api/updates/check"),
   updateWorkspace: (path) => request("/api/settings/workspace", { method: "POST", body: JSON.stringify({ workspace_path: path }) }),
   resetPrompts: () => request("/api/settings/prompts/reset", { method: "POST" }),
   resetApcg: () => request("/api/settings/apcg/reset", { method: "POST" }),
@@ -43,17 +42,22 @@ export const api = {
   exportApkg: (noteId) => request(`/api/notes/${noteId}/cards/export/apkg`, { method: "POST" }),
   
   // Import
-  importFile: (file, title, tags, defaultDeck) => {
+  importFile: async (file, title, tags, defaultDeck) => {
     const formData = new FormData();
     formData.append("file", file);
     if (title) formData.append("title", title);
     if (tags) formData.append("tags", JSON.stringify(tags));
     if (defaultDeck) formData.append("default_deck", defaultDeck);
-    
-    return fetch(`${API_BASE}/api/import/file`, {
+
+    const res = await fetch(`${API_BASE}/api/import/file`, {
       method: "POST",
       body: formData,
-    }).then(res => res.json());
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`Import failed (${res.status}): ${body}`);
+    }
+    return res.json();
   },
   importText: (data) => request("/api/import/text", { method: "POST", body: JSON.stringify(data) }),
   
@@ -77,10 +81,16 @@ export const api = {
     return request(url, { method: "POST" });
   },
   
-  // Coverage
-  getCoverage: (noteId, mode = "auto") => request(`/api/notes/${noteId}/coverage?mode=${mode}`),
+  // Coverage — normalize backend shape { coverage, html } into a flat report
+  getCoverage: async (noteId, mode = "auto") => {
+    const raw = await request(`/api/notes/${noteId}/coverage?mode=${mode}`);
+    return normalizeCoverage(raw);
+  },
   getCoverageSummary: (noteId) => request(`/api/notes/${noteId}/coverage/summary`),
-  postCoverageApcg: (noteId, data) => request(`/api/notes/${noteId}/coverage/apcg`, { method: "POST", body: JSON.stringify(data) }),
+  postCoverageApcg: async (noteId, data) => {
+    const raw = await request(`/api/notes/${noteId}/coverage/apcg`, { method: "POST", body: JSON.stringify(data) });
+    return normalizeCoverage(raw);
+  },
 
   // Source
   getNoteSource: (noteId) => request(`/api/notes/${noteId}/source`),
@@ -105,6 +115,79 @@ export const api = {
   // AI Coverage
   getAiCoverage: (noteId, text) => request(`/api/notes/${noteId}/coverage/ai`, { method: "POST", body: JSON.stringify({ text }) }),
 
+  // Quiz
+  getQuizSettings: () => request("/api/quiz/settings"),
+  updateQuizSettings: (data) => request("/api/quiz/settings", { method: "PUT", body: JSON.stringify(data) }),
+  generateQuiz: (data) => request("/api/quiz/generate", { method: "POST", body: JSON.stringify(data) }),
+  listQuizzes: (noteId = null) => {
+    const q = noteId ? `?note_id=${encodeURIComponent(noteId)}` : "";
+    return request(`/api/quiz/list${q}`);
+  },
+  getQuiz: (quizId) => request(`/api/quiz/${quizId}`),
+  deleteQuiz: (quizId) => request(`/api/quiz/${quizId}`, { method: "DELETE" }),
+  submitQuiz: (quizId, answers) =>
+    request(`/api/quiz/${quizId}/submit`, {
+      method: "POST",
+      body: JSON.stringify({ quiz_id: quizId, answers }),
+    }),
+  getQuizResults: (quizId) => request(`/api/quiz/${quizId}/results`),
+  getQuizCoverage: async (noteId) => {
+    const raw = await request(`/api/quiz/coverage/${noteId}`);
+    // Normalize: backend returns { coverage_data, coverage_html, apcg }
+    // If APCG data is attached, turn it into a normalized coverage report too.
+    if (raw && raw.apcg) {
+      raw.apcg = normalizeCoverage(raw.apcg);
+    }
+    return raw;
+  },
+
   // Updates
   checkForUpdates: () => request("/api/updates/check"),
 };
+
+// -----------------------------------------------------------------------------
+// Helpers
+// -----------------------------------------------------------------------------
+
+/**
+ * Normalize the backend coverage response shape:
+ *   { coverage: CoverageResult, html: string }
+ * into a flat report the UI expects:
+ *   { coverage_html, propositions, total_core_coverage, total_propositions,
+ *     conflicts, cards, detected_mode, uncovered_count }
+ */
+function normalizeCoverage(raw) {
+  if (!raw) return null;
+  // Already flat (e.g. old shape)
+  if (raw.coverage_html || raw.propositions) return raw;
+
+  const coverage = raw.coverage || {};
+  const propositions = (coverage.propositions || []).map((p) => ({
+    id: p.proposition?.id || p.id,
+    text: p.proposition?.text || p.text || "",
+    type: p.proposition?.type || p.type || "general",
+    core_score: p.core_score ?? 0,
+    exact_score: p.exact_score ?? 0,
+    matched: (p.core_score ?? 0) >= 0.3 || Boolean(p.front_back_match),
+    match_method: p.match_method || "",
+    front_back_match: Boolean(p.front_back_match),
+    uncovered_slots: p.uncovered_slots || [],
+    matched_card_ids: (p.matched_evidence || []).map((e) => e?.card_id || e?.id).filter(Boolean),
+  }));
+  const conflicts = (coverage.conflicting_cards || []).map(([card_id, score]) => ({
+    card_id,
+    conflict_score: score,
+    description: `Card ${card_id} has conflicting coverage (score ${score?.toFixed?.(2) ?? score})`,
+  }));
+  return {
+    coverage_html: raw.html || "",
+    propositions,
+    total_core_coverage: coverage.total_core ?? 0,
+    total_exact_coverage: coverage.total_exact ?? 0,
+    total_propositions: propositions.length,
+    uncovered_count: propositions.filter((p) => !p.matched).length,
+    detected_mode: coverage.detected_mode || "",
+    conflicts,
+    cards: coverage.cards || [],
+  };
+}

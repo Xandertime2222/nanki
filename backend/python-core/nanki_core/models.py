@@ -150,6 +150,7 @@ class CreateNoteRequest(BaseModel):
     tags: list[str] = Field(default_factory=list)
     content: str = ""
     default_deck: str = "Default"
+    folder_name: str = ""
 
 
 class SaveNoteRequest(BaseModel):
@@ -158,6 +159,7 @@ class SaveNoteRequest(BaseModel):
     pinned: bool = False
     content: str
     default_deck: str = "Default"
+    folder_name: str = ""
 
 
 class SaveCardRequest(BaseModel):
@@ -270,3 +272,89 @@ class AIGeneratedCardsResponse(BaseModel):
     total_anki_cards_scanned: int = 0
     relevant_anki_cards_shared: int = 0
     note_only: bool = True
+
+
+# ---------------------------------------------------------------------------
+# Quiz models
+# ---------------------------------------------------------------------------
+
+QuizQuestionType = Literal["multiple_choice", "answer_typing", "true_false"]
+QuizDifficulty = Literal["easy", "normal", "hard"]
+QuizQuestionCountPreset = Literal["few", "normal", "many", "ai_decides"]
+
+
+class QuizQuestion(BaseModel):
+    id: str = Field(default_factory=lambda: __import__("uuid").uuid4().hex)
+    type: QuizQuestionType = "multiple_choice"
+    question: str = ""
+    options: list[str] = Field(default_factory=list)
+    correct_answer: str = ""
+    explanation: str = ""
+    source_excerpt: str = ""
+    source_segment: str = ""
+    user_answer: str | None = None
+    is_correct: bool | None = None
+
+
+class QuizResult(BaseModel):
+    total_questions: int = 0
+    correct_answers: int = 0
+    incorrect_answers: int = 0
+    percentage: float = 0.0
+    completed_at: str
+    question_types: list[QuizQuestionType] = Field(default_factory=list)
+
+
+class Quiz(BaseModel):
+    id: str = Field(default_factory=lambda: __import__("uuid").uuid4().hex)
+    note_id: str
+    title: str = "Quiz"
+    questions: list[QuizQuestion] = Field(default_factory=list)
+    results: list[QuizResult] = Field(default_factory=list)
+    created_at: str
+    updated_at: str
+
+
+class QuizSettings(BaseModel):
+    default_question_count: int = 10
+    allowed_question_types: list[QuizQuestionType] = Field(
+        default_factory=lambda: ["multiple_choice", "answer_typing", "true_false"]
+    )
+    ai_prompt: str = ""  # empty -> use DEFAULT_QUIZ_GENERATION_PROMPT
+    passing_percentage: int = 70
+
+
+class QuizStorage(BaseModel):
+    quizzes: list[Quiz] = Field(default_factory=list)
+    quiz_settings: QuizSettings = Field(default_factory=QuizSettings)
+
+
+class QuizGenerationRequest(BaseModel):
+    note_id: str
+    question_count_preset: QuizQuestionCountPreset = "normal"
+    question_types: list[QuizQuestionType] = Field(default_factory=list)
+    difficulty: QuizDifficulty = "normal"
+    custom_prompt: str = ""
+
+
+class QuizSubmissionRequest(BaseModel):
+    quiz_id: str = ""
+    answers: dict[str, str] = Field(default_factory=dict)
+
+
+class QuizCoverageData(BaseModel):
+    note_id: str
+    coverage_percentage: float = 0.0
+    last_quiz_date: str | None = None
+    total_quizzes_taken: int = 0
+    average_score: float = 0.0
+    weak_areas: list[str] = Field(default_factory=list)
+    mastered_areas: list[str] = Field(default_factory=list)
+
+
+class QuizCoverageResponse(BaseModel):
+    coverage_data: QuizCoverageData
+    coverage_html: str | None = None
+    # APCG-style report computed from correct-answer excerpts so the frontend
+    # can render the same layout as the editor coverage view.
+    apcg: dict | None = None

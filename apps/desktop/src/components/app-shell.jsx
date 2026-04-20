@@ -7,6 +7,7 @@ import { ImportView } from "../features/import/import-view";
 import { LibraryView } from "../features/library/library-view";
 import { AnalysisView } from "../features/analysis/analysis-view";
 import { SettingsView } from "../features/settings/settings-view";
+import { QuizView } from "../features/quiz/quiz-view";
 import { EditorView } from "../features/editor/editor-view";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -16,6 +17,7 @@ const views = {
   import: ImportView,
   library: LibraryView,
   analysis: AnalysisView,
+  quiz: QuizView,
   settings: SettingsView,
 };
 

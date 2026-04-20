@@ -4,10 +4,13 @@ export const useAppStore = create((set, get) => ({
   sidebarOpen: true,
   activeView: "editor",
   backendStatus: "unknown",
+  pendingNoteId: null,
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
   setActiveView: (view) => set({ activeView: view }),
   setBackendStatus: (status) => set({ backendStatus: status }),
+  openNoteInEditor: (id) => set({ activeView: "editor", pendingNoteId: id }),
+  clearPendingNoteId: () => set({ pendingNoteId: null }),
   
   // Check backend health
   checkBackend: async () => {

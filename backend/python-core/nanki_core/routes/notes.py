@@ -84,6 +84,7 @@ async def update_note(note_id: str, payload: SaveNoteRequest) -> dict:
             tags=payload.tags,
             default_deck=payload.default_deck,
             pinned=payload.pinned,
+            folder_name=payload.folder_name,
         )
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

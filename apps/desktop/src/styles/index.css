@@ -12,6 +12,14 @@
   --color-accent-foreground: #171717;
   --color-destructive: #ef4444;
   --color-destructive-foreground: #fafafa;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #0a0a0a;
+  --color-card: #ffffff;
+  --color-card-foreground: #0a0a0a;
+  --color-secondary: #f5f5f5;
+  --color-secondary-foreground: #171717;
+  --color-ring: #171717;
+  --color-input: #e5e5e5;
   --radius-sm: 0.25rem;
   --radius-md: 0.375rem;
   --radius-lg: 0.5rem;
@@ -30,6 +38,14 @@
   --color-accent-foreground: #fafafa;
   --color-destructive: #ef4444;
   --color-destructive-foreground: #fafafa;
+  --color-popover: #171717;
+  --color-popover-foreground: #fafafa;
+  --color-card: #0a0a0a;
+  --color-card-foreground: #fafafa;
+  --color-secondary: #262626;
+  --color-secondary-foreground: #fafafa;
+  --color-ring: #d4d4d4;
+  --color-input: #262626;
 }
 
 * {
@@ -40,4 +56,332 @@ body {
   background: var(--color-background);
   color: var(--color-foreground);
   font-family: system-ui, -apple-system, sans-serif;
+}
+
+/* ===========================================================
+   Coverage Analysis UI (matches main branch styling)
+   =========================================================== */
+
+/* Coverage text container */
+.coverage-text {
+  font-family: inherit;
+  font-size: 0.9375rem;
+  line-height: 1.85;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  color: var(--color-foreground);
+  margin: 0;
+  padding: 0;
+}
+
+.coverage-text.empty {
+  color: var(--color-muted-foreground);
+  font-style: italic;
+}
+
+/* Coverage token base */
+.coverage-token {
+  display: inline;
+  padding: 1px 2px;
+  border-radius: 3px;
+  cursor: default;
+  transition: background-color 0.15s ease, outline-color 0.15s ease;
+  position: relative;
+}
+
+/* Covered: local cards only -> green */
+.coverage-token.covered.local {
+  background-color: rgba(34, 197, 94, 0.18);
+}
+
+/* Covered: anki cards only -> indigo */
+.coverage-token.covered.anki {
+  background-color: rgba(99, 102, 241, 0.18);
+}
+
+/* Covered: mixed (local + anki) -> purple */
+.coverage-token.covered.mixed {
+  background-color: rgba(168, 85, 247, 0.18);
+}
+
+/* Fallback if origin isn't specified */
+.coverage-token.covered:not(.local):not(.anki):not(.mixed) {
+  background-color: rgba(34, 197, 94, 0.18);
+}
+
+/* Partial coverage -> yellow */
+.coverage-token.partial {
+  background-color: rgba(234, 179, 8, 0.2);
+}
+
+/* Uncovered -> red with wavy underline */
+.coverage-token.uncovered {
+  background-color: rgba(239, 68, 68, 0.08);
+  text-decoration: underline wavy rgba(239, 68, 68, 0.6);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.dark .coverage-token.covered.local {
+  background-color: rgba(34, 197, 94, 0.25);
+}
+.dark .coverage-token.covered.anki {
+  background-color: rgba(99, 102, 241, 0.28);
+}
+.dark .coverage-token.covered.mixed {
+  background-color: rgba(168, 85, 247, 0.28);
+}
+.dark .coverage-token.partial {
+  background-color: rgba(234, 179, 8, 0.28);
+}
+.dark .coverage-token.uncovered {
+  background-color: rgba(239, 68, 68, 0.18);
+}
+
+/* Hover outline on covered/partial */
+.coverage-token.covered:hover,
+.coverage-token.partial:hover {
+  outline: 2px solid rgba(99, 102, 241, 0.45);
+  outline-offset: 1px;
+}
+
+.coverage-token.uncovered:hover {
+  background-color: rgba(239, 68, 68, 0.2);
+}
+
+/* Suggesting state (AI generating) */
+.coverage-token.suggesting {
+  opacity: 0.5;
+  cursor: wait;
+  animation: coverage-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes coverage-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 0.85; }
+}
+
+/* Suggested (after successful AI card creation) */
+.coverage-token.suggested {
+  background-color: rgba(34, 197, 94, 0.2) !important;
+  text-decoration: underline solid rgba(34, 197, 94, 0.7) !important;
+}
+
+/* Coverage hover tooltip */
+.coverage-hover-tooltip {
+  max-width: 360px;
+  min-width: 240px;
+  padding: 0.65rem 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--color-border);
+  background: var(--color-background);
+  color: var(--color-foreground);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12), 0 4px 10px rgba(0, 0, 0, 0.06);
+  animation: coverage-fade-in 120ms ease-out;
+  font-size: 0.8125rem;
+}
+
+.dark .coverage-hover-tooltip {
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 4px 10px rgba(0, 0, 0, 0.3);
+}
+
+@keyframes coverage-fade-in {
+  from { opacity: 0; transform: translateY(-2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.coverage-tooltip-title {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-muted-foreground);
+  margin-bottom: 0.4rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.coverage-tooltip-card {
+  padding: 0.35rem 0;
+}
+
+.coverage-tooltip-card + .coverage-tooltip-card {
+  border-top: 1px dashed var(--color-border);
+  margin-top: 0.35rem;
+  padding-top: 0.5rem;
+}
+
+.coverage-tooltip-card-type {
+  display: flex;
+  gap: 0.3rem;
+  margin-bottom: 0.25rem;
+  font-size: 0.6875rem;
+  color: var(--color-muted-foreground);
+}
+
+.coverage-tooltip-card-front {
+  font-weight: 600;
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  margin-bottom: 0.15rem;
+}
+
+.coverage-tooltip-card-back {
+  font-size: 0.75rem;
+  color: var(--color-muted-foreground);
+  line-height: 1.35;
+}
+
+/* Coverage hero (big percentage + progress bar) */
+.coverage-hero {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  background: rgba(99, 102, 241, 0.06);
+  border: 1px solid rgba(99, 102, 241, 0.18);
+}
+
+.dark .coverage-hero {
+  background: rgba(99, 102, 241, 0.12);
+  border-color: rgba(99, 102, 241, 0.35);
+}
+
+.coverage-hero-percent {
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.coverage-hero-bar {
+  height: 8px;
+  border-radius: 99px;
+  background: rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.dark .coverage-hero-bar {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.coverage-hero-bar-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #6366f1, #8b5cf6);
+  transition: width 400ms ease;
+}
+
+.coverage-hero-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+/* Coverage list item (gap / conflict) */
+.coverage-list-item {
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-left: 3px solid rgba(239, 68, 68, 0.55);
+  border-radius: 0.375rem;
+  background: var(--color-muted);
+  transition: border-color 0.15s ease;
+}
+
+.coverage-list-item.conflict {
+  border-left-color: rgba(234, 179, 8, 0.65);
+}
+
+.coverage-list-item-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  align-items: flex-start;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.coverage-list-item-type-badge {
+  font-size: 0.625rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--color-muted-foreground);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.dark .coverage-list-item-type-badge {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.coverage-muted-empty {
+  padding: 0.75rem;
+  border: 1px dashed var(--color-border);
+  border-radius: 0.375rem;
+  color: var(--color-muted-foreground);
+  font-size: 0.8125rem;
+  text-align: center;
+}
+
+/* ===========================================================
+   Knowledge Segment UI (Quiz Coverage)
+   =========================================================== */
+
+.knowledge-segment {
+  display: block;
+  padding: 0.375rem 0.5rem;
+  border-radius: 0.25rem;
+  margin: 0.25rem 0;
+  cursor: default;
+  transition: filter 0.15s ease, outline-color 0.15s ease;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.knowledge-segment:hover {
+  outline: 2px solid rgba(99, 102, 241, 0.45);
+  outline-offset: 1px;
+  filter: brightness(1.08);
+}
+
+.knowledge-segment[data-status="understood"] {
+  background-color: rgba(34, 197, 94, 0.18);
+  border-left: 3px solid #22c55e;
+}
+
+.knowledge-segment[data-status="partial"] {
+  background-color: rgba(234, 179, 8, 0.2);
+  border-left: 3px solid #eab308;
+}
+
+.knowledge-segment[data-status="not_understood"] {
+  background-color: rgba(239, 68, 68, 0.15);
+  border-left: 3px solid #ef4444;
+}
+
+.knowledge-segment[data-status="none"] {
+  color: var(--color-muted-foreground);
+  opacity: 0.75;
+}
+
+.dark .knowledge-segment[data-status="understood"] {
+  background-color: rgba(34, 197, 94, 0.25);
+}
+
+.dark .knowledge-segment[data-status="partial"] {
+  background-color: rgba(234, 179, 8, 0.28);
+}
+
+.dark .knowledge-segment[data-status="not_understood"] {
+  background-color: rgba(239, 68, 68, 0.22);
+}
+
+.dark .knowledge-segment[data-status="none"] {
+  opacity: 0.65;
 }

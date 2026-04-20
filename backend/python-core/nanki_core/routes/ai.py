@@ -73,9 +73,11 @@ async def ai_generate_cards(payload: AIGenerateCardsRequest) -> dict:
         return await ai_service.generate_cards(
             settings,
             note=note,
-            text=payload.text,
-            num_cards=payload.num_cards,
-            card_type=payload.card_type,
+            source_text=payload.source_text,
+            target_count=payload.target_count,
+            auto=payload.auto,
+            model=payload.model,
+            include_anki_coverage=payload.include_anki_coverage if payload.include_anki_coverage is not None else True,
         )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
@@ -90,7 +92,7 @@ async def ai_suggest_cards_for_gaps(payload: AISuggestCardsForGapsRequest) -> di
         return await ai_service.suggest_cards_for_gaps(
             settings,
             note=note,
-            gaps=payload.gaps,
+            gap_excerpts=payload.gap_excerpts,
         )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc

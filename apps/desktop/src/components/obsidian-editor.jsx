@@ -136,26 +136,26 @@ const hideHeaderMarkers = ViewPlugin.fromClass(
   { decorations: (v) => v.decorations }
 );
 
-// Custom extension to show/hide markdown markers based on cursor position
-const hideMarkdownMarkers = EditorView.updateListener.of((update) => {
-  if (!update.selectionSet) return;
-
-  const view = update.view;
-  const cursorLine = view.state.doc.lineAt(view.state.selection.main.head);
-
-  // Add a data attribute to the editor for CSS targeting
-  const dom = view.dom;
-  const lines = dom.querySelectorAll('.cm-line');
-  lines.forEach((line, index) => {
-    const lineNum = view.state.doc.lineAt(view.viewport.from);
-    const actualLineNum = lineNum.number + index;
-    if (actualLineNum === cursorLine.number) {
-      line.classList.add('cm-cursorLine');
-    } else {
-      line.classList.remove('cm-cursorLine');
+const cursorLinePlugin = ViewPlugin.fromClass(
+  class {
+    constructor(view) {
+      this.decorations = this.computeDeco(view);
     }
-  });
-});
+    update(update) {
+      if (update.selectionSet || update.docChanged) {
+        this.decorations = this.computeDeco(update.view);
+      }
+    }
+    computeDeco(view) {
+      const head = view.state.selection.main.head;
+      const line = view.state.doc.lineAt(head);
+      return Decoration.set([ Decoration.line({ class: "cm-cursorLine" }).range(line.from) ]);
+    }
+  },
+  {
+    decorations: v => v.decorations
+  }
+);
 
 // Click to edit plugin - allows clicking on rendered content to edit
 const clickToEdit = EditorView.domEventHandlers({
@@ -163,10 +163,12 @@ const clickToEdit = EditorView.domEventHandlers({
     const target = event.target;
     if (target.classList.contains('cm-foldMarker')) return false;
 
-    // Focus the editor
     view.focus();
 
-    // Try to place cursor at click position
+    // If a drag-selection just completed, don't collapse it by re-placing the cursor.
+    const { from, to } = view.state.selection.main;
+    if (from !== to) return true;
+
     const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
     if (pos !== null) {
       view.dispatch({
@@ -237,6 +239,7 @@ export function ObsidianEditor({
   const viewRef = useRef(null);
   const onChangeRef = useRef(onChange);
   const onSelectRef = useRef(onSelect);
+  const internalValueRef = useRef(value || "");
 
   // Keep refs updated
   useEffect(() => {
@@ -247,6 +250,8 @@ export function ObsidianEditor({
   // Initialize editor
   useEffect(() => {
     if (!editorRef.current) return;
+
+    let selectTimer = null;
 
     const startState = EditorState.create({
       doc: value || "",
@@ -267,7 +272,7 @@ export function ObsidianEditor({
         syntaxHighlighting(defaultHighlightStyle),
 
         // Obsidian-like features
-        hideMarkdownMarkers,
+        cursorLinePlugin,
         hideHeaderMarkers,
         clickToEdit,
         obsidianKeymap,
@@ -288,19 +293,32 @@ export function ObsidianEditor({
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
             const newValue = update.state.doc.toString();
+            internalValueRef.current = newValue;
             onChangeRef.current?.(newValue);
           }
           if (update.selectionSet && onSelectRef.current) {
+            if (selectTimer) clearTimeout(selectTimer);
+            
             const selection = update.state.selection.main;
             const text = update.state.doc.sliceString(selection.from, selection.to);
-            if (text) {
-              const coords = viewRef.current?.coordsAtPos(selection.from);
-              onSelectRef.current({
-                text,
-                from: selection.from,
-                to: selection.to,
-                rect: coords,
-              });
+            
+            if (!text) {
+              if (update.view.hasFocus) onSelectRef.current(null);
+            } else {
+              // Capture the DOMRect synchronously — window.getSelection() is
+              // cleared by the time a setTimeout fires.
+              const domSel = window.getSelection();
+              const rect = domSel && domSel.rangeCount > 0
+                ? domSel.getRangeAt(0).getBoundingClientRect()
+                : null;
+              selectTimer = setTimeout(() => {
+                onSelectRef.current({
+                  text,
+                  from: selection.from,
+                  to: selection.to,
+                  rect,
+                });
+              }, 250);
             }
           }
         }),
@@ -337,10 +355,14 @@ export function ObsidianEditor({
     const view = viewRef.current;
     if (!view) return;
 
+    if (value === internalValueRef.current) return;
+
     const currentValue = view.state.doc.toString();
-    if (value !== currentValue) {
+    const normalizedValue = (value || "").replace(/\r\n/g, "\n");
+    if (normalizedValue !== currentValue) {
+      internalValueRef.current = normalizedValue;
       view.dispatch({
-        changes: { from: 0, to: currentValue.length, insert: value || "" },
+        changes: { from: 0, to: currentValue.length, insert: normalizedValue },
       });
     }
   }, [value]);

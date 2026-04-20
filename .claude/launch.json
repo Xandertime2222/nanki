@@ -7,6 +7,13 @@
       "runtimeArgs": ["-m", "noteforge_anki_studio"],
       "port": 7788,
       "cwd": "C:\\Users\\Alex\\Development\\nanki"
+    },
+    {
+      "name": "nanki-desktop",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 1420,
+      "cwd": "C:\\Users\\Alex\\Development\\nanki\\apps\\desktop"
     }
   ]
 }

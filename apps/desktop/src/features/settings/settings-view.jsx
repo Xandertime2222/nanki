@@ -224,7 +224,7 @@ export function SettingsView() {
       </div>
 
       {/* Content */}
-      <ScrollArea className="flex-1">
+      <div className="flex-1 overflow-y-auto min-h-0">
         <div className="max-w-4xl mx-auto p-6 space-y-8">
           
           {/* === GENERAL === */}
@@ -803,7 +803,7 @@ export function SettingsView() {
           </Card>
 
         </div>
-      </ScrollArea>
+      </div>
     </div>
   );
 }

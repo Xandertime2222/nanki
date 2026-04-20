@@ -136,7 +136,7 @@ class WorkspaceStore:
             source_type=source_type,
             original_filename=original_filename,
             default_deck=default_deck or "Default",
-            folder_name=note_id,
+            folder_name="",
         )
         note = NoteDocument(meta=meta, content=content, cards=[], source=source)
         self.save_note_document(note)
@@ -183,12 +183,14 @@ class WorkspaceStore:
         pinned: bool,
         content: str,
         default_deck: str,
+        folder_name: str = "",
     ) -> NoteDocument:
         existing = self.load_note(note_id)
         existing.meta.title = title.strip() or existing.meta.title
         existing.meta.tags = normalize_tags(tags)
         existing.meta.pinned = pinned
         existing.meta.default_deck = default_deck or "Default"
+        existing.meta.folder_name = folder_name
         existing.content = content
         return self.save_note_document(existing)
 
@@ -205,7 +207,7 @@ class WorkspaceStore:
         frontmatter.setdefault("updated_at", frontmatter["created_at"])
         frontmatter.setdefault("source_type", "markdown")
         frontmatter.setdefault("default_deck", "Default")
-        frontmatter.setdefault("folder_name", note_id)
+        frontmatter.setdefault("folder_name", "")
         meta = NoteMetadata.model_validate(frontmatter)
         cards = self.load_cards(note_id)
         source = self.load_source_manifest(note_id)

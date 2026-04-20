@@ -54,8 +54,8 @@ export function ImportView() {
     }
 
     setFileImporting(true);
+    const failedFiles = [];
     let successCount = 0;
-    let errorCount = 0;
 
     for (const file of files) {
       try {
@@ -64,7 +64,7 @@ export function ImportView() {
         successCount++;
       } catch (err) {
         console.error(`Failed to import ${file.name}:`, err);
-        errorCount++;
+        failedFiles.push(file.name);
       }
     }
 
@@ -72,13 +72,19 @@ export function ImportView() {
 
     if (successCount > 0) {
       toast.success(`Successfully imported ${successCount} file(s)`);
-      setFiles([]);
-      setFileTitle("");
-      setFileTags("");
-      setFileDefaultDeck("");
+      // Only clear successfully-imported files
+      if (failedFiles.length === 0) {
+        setFiles([]);
+        setFileTitle("");
+        setFileTags("");
+        setFileDefaultDeck("");
+      } else {
+        // Keep only the failed files in the list so the user can retry
+        setFiles((prev) => prev.filter((f) => failedFiles.includes(f.name)));
+      }
     }
-    if (errorCount > 0) {
-      toast.error(`Failed to import ${errorCount} file(s)`);
+    if (failedFiles.length > 0) {
+      toast.error(`Failed to import: ${failedFiles.join(", ")}`);
     }
   };
 
@@ -129,7 +135,7 @@ export function ImportView() {
   };
 
   return (
-    <div className="p-6 space-y-6" data-testid="import-view">
+    <div className="h-full overflow-y-auto p-6 space-y-6" data-testid="import-view">
       <div className="flex items-center gap-3">
         <Upload className="h-6 w-6" />
         <h1 className="text-2xl font-bold">Import</h1>

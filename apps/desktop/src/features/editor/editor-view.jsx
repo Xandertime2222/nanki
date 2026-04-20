@@ -1,4 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useFloating, offset, flip, shift } from "@floating-ui/react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "../../components/ui/button";
 import { Badge } from "../../components/ui/badge";
 import { useAppStore } from "../../stores/app-store";
@@ -11,40 +13,13 @@ import {
   Bold, Italic, Heading1, Heading2, Heading3, List, Quote, Code,
   Eraser, X, ChevronDown, ChevronRight, Search, MoreVertical,
   Copy, Download, Eye, Settings, BookOpen, RefreshCw, Moon, Sun, Monitor,
-  Send, MessageSquare, Lightbulb, Loader2
+  Send, MessageSquare, Lightbulb, Loader2, GraduationCap
 } from "lucide-react";
 import { Card, CardContent } from "../../components/ui/card";
 import { toast } from "sonner";
 import { api } from "../../lib/api";
-
-// Simple markdown to HTML converter (client-side)
-function markdownToHtml(md) {
-  if (!md) return "";
-  let html = md
-    // Code blocks
-    .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
-    // Inline code
-    .replace(/`([^`]+)`/g, '<code>$1</code>')
-    // Headings
-    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
-    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
-    // Bold and italic
-    .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    // Links
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
-    // Horizontal rule
-    .replace(/^---$/gm, '<hr/>')
-    // Blockquotes
-    .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
-    // Unordered lists
-    .replace(/^- (.+)$/gm, '<li>$1</li>')
-    // Line breaks
-    .replace(/\n/g, '<br/>');
-  return html;
-}
+import { CoverageView } from "../coverage/coverage-view";
+import { QuizCoverageView } from "../quiz/quiz-coverage-view";
 
 // Quick Card Dock component
 function QuickCardDock({ noteId, deck, onSave, onSaveAndPush }) {
@@ -113,50 +88,60 @@ function QuickCardDock({ noteId, deck, onSave, onSaveAndPush }) {
 
 // Selection Bubble component
 function SelectionBubble({ selection, onBasic, onCloze, onFront, onBack, onAiChat, onAiExplain }) {
-  const bubbleRef = useRef(null);
-  const [position, setPosition] = useState({ left: 0, top: 0 });
-
-  useEffect(() => {
-    if (selection?.rect) {
-      const rect = selection.rect;
-      const bubbleWidth = 420;
-      const bubbleHeight = 48;
-      let left = rect.left + rect.width / 2 - bubbleWidth / 2;
-      left = Math.max(8, Math.min(window.innerWidth - bubbleWidth - 8, left));
-      let top = rect.top - bubbleHeight - 12;
-      if (top < 12) top = rect.bottom + 12;
-      setPosition({ left, top });
-    }
+  const virtualReference = useMemo(() => {
+    if (!selection?.rect) return null;
+    const { left, right, top, bottom } = selection.rect;
+    return {
+      getBoundingClientRect() {
+        return { x: left, y: top, width: right - left, height: bottom - top, top, right, bottom, left };
+      },
+    };
   }, [selection]);
 
-  if (!selection?.text) return null;
+  const { refs, floatingStyles } = useFloating({
+    strategy: "fixed",
+    placement: "top",
+    elements: { reference: virtualReference },
+    middleware: [offset(10), flip(), shift({ padding: 8 })],
+  });
 
   return (
-    <div
-      ref={bubbleRef}
-      className="fixed z-50 flex gap-1 p-1.5 rounded-lg bg-zinc-900/95 backdrop-blur-sm shadow-lg border border-white/10"
-      style={{ left: position.left, top: position.top }}
-    >
-      <Button size="sm" variant="ghost" className="text-white hover:bg-white/10 h-7 px-2 text-xs" onClick={onBasic}>
-        Basic
-      </Button>
-      <Button size="sm" variant="ghost" className="text-white hover:bg-white/10 h-7 px-2 text-xs" onClick={onCloze}>
-        Cloze
-      </Button>
-      <Button size="sm" variant="ghost" className="text-white hover:bg-white/10 h-7 px-2 text-xs" onClick={onFront}>
-        To Front
-      </Button>
-      <Button size="sm" variant="ghost" className="text-white hover:bg-white/10 h-7 px-2 text-xs" onClick={onBack}>
-        To Back
-      </Button>
-      <div className="w-px bg-white/20 mx-1" />
-      <Button size="sm" variant="ghost" className="text-white hover:bg-white/10 h-7 px-2 text-xs" onClick={onAiChat}>
-        AI Chat
-      </Button>
-      <Button size="sm" variant="ghost" className="text-white hover:bg-white/10 h-7 px-2 text-xs" onClick={onAiExplain}>
-        Explain
-      </Button>
-    </div>
+    <AnimatePresence>
+      {selection?.text && (
+        <motion.div
+          ref={refs.setFloating}
+          initial={{ opacity: 0, y: 8, scale: 0.95 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 8, scale: 0.95 }}
+          transition={{ duration: 0.15, ease: "easeOut" }}
+          style={{ ...floatingStyles, zIndex: 100 }}
+          className="flex items-center gap-1 p-1.5 rounded-xl bg-zinc-900/95 backdrop-blur-md shadow-2xl border border-white/10"
+          onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+          onClick={(e) => { e.stopPropagation(); }}
+        >
+          <Button size="sm" variant="ghost" className="text-white hover:bg-white/20 h-8 px-3 rounded-lg text-xs font-medium transition-colors" onClick={onBasic}>
+            Basic
+          </Button>
+          <Button size="sm" variant="ghost" className="text-white hover:bg-white/20 h-8 px-3 rounded-lg text-xs font-medium transition-colors" onClick={onCloze}>
+            Cloze
+          </Button>
+          <div className="w-px h-5 bg-white/20 mx-1" />
+          <Button size="sm" variant="ghost" className="text-white hover:bg-white/20 h-8 px-3 rounded-lg text-xs font-medium transition-colors" onClick={onFront}>
+            Front
+          </Button>
+          <Button size="sm" variant="ghost" className="text-white hover:bg-white/20 h-8 px-3 rounded-lg text-xs font-medium transition-colors" onClick={onBack}>
+            Back
+          </Button>
+          <div className="w-px h-5 bg-white/20 mx-1" />
+          <Button size="sm" variant="ghost" className="text-white hover:bg-white/20 h-8 px-3 rounded-lg text-xs font-medium transition-colors" onClick={onAiChat}>
+            <MessageSquare className="w-3.5 h-3.5 mr-1.5" /> Chat
+          </Button>
+          <Button size="sm" variant="ghost" className="text-white hover:bg-white/20 h-8 px-3 rounded-lg text-xs font-medium transition-colors" onClick={onAiExplain}>
+            <Lightbulb className="w-3.5 h-3.5 mr-1.5" /> Explain
+          </Button>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
 
@@ -190,13 +175,16 @@ function EditorToolbar({ onFormat }) {
 
 export function EditorView() {
   const backendStatus = useAppStore((s) => s.backendStatus);
+  const pendingNoteId = useAppStore((s) => s.pendingNoteId);
+  const clearPendingNoteId = useAppStore((s) => s.clearPendingNoteId);
   const { notes, currentNote, loadNotes, loadNote, updateNote, deleteNote, duplicateNote } = useNotesStore();
-  const { cards, loadCards, createCard, deleteCard } = useCardsStore();
+  const { cards, loadCards, createCard, deleteCard, updateCard } = useCardsStore();
   const [noteId, setNoteId] = useState(null);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [tags, setTags] = useState("");
   const [deck, setDeck] = useState("Default");
+  const [folder, setFolder] = useState("");
   const [pinned, setPinned] = useState(false);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState("Ready");
@@ -212,13 +200,16 @@ export function EditorView() {
   const [newCardSourceLocator, setNewCardSourceLocator] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [selection, setSelection] = useState(null);
+  const [confirmDeleteNote, setConfirmDeleteNote] = useState(false);
+  const [confirmDeleteCardId, setConfirmDeleteCardId] = useState(null);
+  const [editingCardId, setEditingCardId] = useState(null);
   // Theme
   const { theme, setTheme } = useTheme();
   const [showSource, setShowSource] = useState(false);
   const [showAiPanel, setShowAiPanel] = useState(false);
   const [aiMode, setAiMode] = useState("chat");
-  const [showPreview, setShowPreview] = useState(false);
   const [coverageView, setCoverageView] = useState(false);
+  const [quizCoverageView, setQuizCoverageView] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [coverageReport, setCoverageReport] = useState(null);
   const [coverageLoading, setCoverageLoading] = useState(false);
@@ -232,8 +223,24 @@ export function EditorView() {
   const [aiInput, setAiInput] = useState("");
   const [aiExplainContext, setAiExplainContext] = useState("");
   const [aiExplainInstructions, setAiExplainInstructions] = useState("");
+  const [aiSourceText, setAiSourceText] = useState("");
   const [aiProcessing, setAiProcessing] = useState(false);
   const [explainResult, setExplainResult] = useState(null);
+
+  // Auto-scroll chat to bottom whenever a new message arrives
+  useEffect(() => {
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [chatMessages]);
+
+  // Open note navigated from workspace/library
+  useEffect(() => {
+    if (pendingNoteId) {
+      setNoteId(pendingNoteId);
+      clearPendingNoteId();
+    }
+  }, [pendingNoteId, clearPendingNoteId]);
 
   // Load notes on mount
   useEffect(() => {
@@ -251,6 +258,7 @@ export function EditorView() {
           setContent(note.content || "");
           setTags(note.meta?.tags?.join(", ") || "");
           setDeck(note.meta?.default_deck || "Default");
+          setFolder(note.meta?.folder_name || "");
           setPinned(note.meta?.pinned || false);
           loadCards(noteId).catch(console.error);
           loadNoteSource(noteId);
@@ -306,23 +314,6 @@ export function EditorView() {
     setSelection(null);
   }, [selection]);
 
-  // Handle text selection in editor
-  const handleEditorSelect = useCallback(() => {
-    const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
-      setSelection(null);
-      return;
-    }
-    const text = sel.toString().trim();
-    if (!text) {
-      setSelection(null);
-      return;
-    }
-    const range = sel.getRangeAt(0);
-    const rect = range.getBoundingClientRect();
-    setSelection({ text, rect });
-  }, []);
-
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeydown = (e) => {
@@ -348,7 +339,8 @@ export function EditorView() {
         setShowCardDrawer(false);
         setShowSearch(false);
         setShowAiPanel(false);
-        setShowPreview(false);
+        setCoverageView(false);
+        setQuizCoverageView(false);
       }
     };
     document.addEventListener("keydown", handleKeydown);
@@ -371,6 +363,7 @@ export function EditorView() {
         content,
         tags: parseTags(tags),
         default_deck: deck,
+        folder_name: folder,
         pinned,
       }).then(() => {
         setStatus(`Saved · ${new Date().toLocaleTimeString()}`);
@@ -381,7 +374,7 @@ export function EditorView() {
         setSaving(false);
       });
     }, 850);
-  }, [noteId, title, content, tags, deck, pinned, updateNote]);
+  }, [noteId, title, content, tags, deck, folder, pinned, updateNote]);
 
   const handleSave = async () => {
     if (!noteId) return;
@@ -394,6 +387,7 @@ export function EditorView() {
         content,
         tags: parseTags(tags),
         default_deck: deck,
+        folder_name: folder,
         pinned,
       });
       setStatus(`Saved · ${new Date().toLocaleTimeString()}`);
@@ -428,7 +422,12 @@ export function EditorView() {
 
   const handleDeleteNote = async () => {
     if (!noteId) return;
-    if (!confirm("Delete this note and all cards?")) return;
+    if (!confirmDeleteNote) {
+      setConfirmDeleteNote(true);
+      setTimeout(() => setConfirmDeleteNote(false), 3000);
+      return;
+    }
+    setConfirmDeleteNote(false);
     try {
       await deleteNote(noteId);
       setNoteId(null);
@@ -486,8 +485,60 @@ export function EditorView() {
     }
   };
 
+  const handleUpdateCard = async () => {
+    if (!noteId || !editingCardId || !newCardFront.trim()) {
+      toast.error("Card front is required");
+      return;
+    }
+    try {
+      await updateCard(noteId, editingCardId, {
+        front: newCardFront,
+        back: newCardBack,
+        type: newCardType,
+        deck_name: deck || "Default",
+        tags: parseTags(newCardTags),
+        extra: newCardExtra,
+        source_locator: newCardSourceLocator,
+      });
+      setEditingCardId(null);
+      setNewCardFront("");
+      setNewCardBack("");
+      setNewCardTags("");
+      setNewCardExtra("");
+      setNewCardSourceLocator("");
+      toast.success("Card updated");
+      loadCards(noteId);
+    } catch (err) {
+      toast.error(`Failed to update card: ${err.message}`);
+    }
+  };
+
+  const startEditingCard = (card) => {
+    setEditingCardId(card.id);
+    setNewCardType(card.type || "basic");
+    setNewCardFront(card.front || "");
+    setNewCardBack(card.back || "");
+    setNewCardTags((card.tags || []).join(", "));
+    setNewCardExtra(card.extra || "");
+    setNewCardSourceLocator(card.source_locator || "");
+  };
+  
+  const cancelEditingCard = () => {
+    setEditingCardId(null);
+    setNewCardFront("");
+    setNewCardBack("");
+    setNewCardTags("");
+    setNewCardExtra("");
+    setNewCardSourceLocator("");
+  };
+
   const handleDeleteCard = async (cardId) => {
-    if (!confirm("Delete this card?")) return;
+    if (confirmDeleteCardId !== cardId) {
+      setConfirmDeleteCardId(cardId);
+      setTimeout(() => setConfirmDeleteCardId((cur) => (cur === cardId ? null : cur)), 3000);
+      return;
+    }
+    setConfirmDeleteCardId(null);
     try {
       await deleteCard(noteId, cardId);
       toast.success("Card deleted");
@@ -511,13 +562,14 @@ export function EditorView() {
   };
 
   const handleAiGenerate = async () => {
-    if (!content.trim()) {
+    const text = aiSourceText.trim() || content.trim();
+    if (!text) {
       toast.error("Write some content first");
       return;
     }
     setAiLoading(true);
     try {
-      const result = await api.generateCards(noteId, { content: content.slice(0, 5000) });
+      const result = await api.generateCards(noteId, { source_text: text.slice(0, 5000) });
       toast.success(`Generated ${result.cards?.length || 0} cards`);
       loadCards(noteId);
     } catch (err) {
@@ -688,8 +740,16 @@ export function EditorView() {
               <Button variant="ghost" size="sm" className="flex-1" onClick={handleDuplicateNote} disabled={!noteId}>
                 <Copy className="h-3 w-3 mr-1" /> Duplicate
               </Button>
-              <Button variant="ghost" size="sm" className="flex-1 text-red-500" onClick={handleDeleteNote} disabled={!noteId}>
-                <Trash2 className="h-3 w-3 mr-1" /> Delete
+              <Button
+                variant="ghost"
+                size="sm"
+                className={`flex-1 ${confirmDeleteNote ? "text-red-600 bg-red-100 hover:bg-red-200 dark:bg-red-900/40" : "text-red-500"}`}
+                onClick={handleDeleteNote}
+                disabled={!noteId}
+                title={confirmDeleteNote ? "Click again to confirm" : "Delete note and all cards"}
+              >
+                <Trash2 className="h-3 w-3 mr-1" />
+                {confirmDeleteNote ? "Confirm?" : "Delete"}
               </Button>
             </div>
           </>
@@ -731,25 +791,39 @@ export function EditorView() {
                   <Layers className="h-3.5 w-3.5 mr-1" /> Push
                 </Button>
 
-                {/* AI Generate */}
-                <Button variant="outline" size="sm" onClick={handleAiGenerate} disabled={aiLoading}>
-                  <Sparkles className="h-3.5 w-3.5 mr-1" />
-                  {aiLoading ? "..." : "AI"}
-                </Button>
-
                 {/* Coverage */}
-                <Button variant="outline" size="sm" onClick={() => setCoverageView(!coverageView)}>
-                  <BookOpen className="h-3.5 w-3.5 mr-1" /> Coverage
+                <Button
+                  variant={coverageView ? "secondary" : "outline"}
+                  size="sm"
+                  onClick={() => {
+                    const next = !coverageView;
+                    setCoverageView(next);
+                    setQuizCoverageView(false);
+                    if (next && !coverageReport && !coverageLoading) {
+                      loadCoverage();
+                    }
+                  }}
+                >
+                  <BookOpen className="h-3.5 w-3.5 mr-1" />
+                  {coverageView ? "Back to writing" : "Coverage"}
                 </Button>
 
-                {/* Preview Toggle */}
-                <Button variant="outline" size="sm" onClick={() => setShowPreview(!showPreview)} title="Toggle Markdown Preview">
-                  <Eye className="h-3.5 w-3.5 mr-1" /> Preview
+                {/* Knowledge Coverage (from quizzes) */}
+                <Button
+                  variant={quizCoverageView ? "secondary" : "outline"}
+                  size="sm"
+                  onClick={() => {
+                    setQuizCoverageView(!quizCoverageView);
+                    setCoverageView(false);
+                  }}
+                >
+                  <GraduationCap className="h-3.5 w-3.5 mr-1" />
+                  {quizCoverageView ? "Back to writing" : "Knowledge"}
                 </Button>
 
                 {/* AI Panel Toggle */}
                 <Button variant={showAiPanel ? "secondary" : "outline"} size="sm" onClick={() => setShowAiPanel(!showAiPanel)}>
-                  <MessageSquare className="h-3.5 w-3.5 mr-1" /> AI
+                  <Sparkles className="h-3.5 w-3.5 mr-1" /> AI
                 </Button>
 
                 {/* Save */}
@@ -762,14 +836,14 @@ export function EditorView() {
 
             {/* Details Panel */}
             {showDetails && (
-              <div className="border-b p-3 bg-muted/30 grid grid-cols-3 gap-4">
+              <div className="border-b p-3 bg-muted/30 grid grid-cols-4 gap-4">
                 <div>
                   <label className="text-xs text-muted-foreground">Tags</label>
                   <input
                     type="text"
                     value={tags}
                     onChange={(e) => { setTags(e.target.value); scheduleSave(); }}
-                    placeholder="biology, chapter-2"
+                    placeholder="biologie, kapitel-2"
                     className="w-full text-sm bg-transparent border-none outline-none"
                   />
                 </div>
@@ -783,6 +857,16 @@ export function EditorView() {
                     className="w-full text-sm bg-transparent border-none outline-none"
                   />
                 </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Ordner</label>
+                  <input
+                    type="text"
+                    value={folder}
+                    onChange={(e) => { setFolder(e.target.value); scheduleSave(); }}
+                    placeholder="Biochemie / Semester 2"
+                    className="w-full text-sm bg-transparent border-none outline-none"
+                  />
+                </div>
                 <div className="flex items-end">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
@@ -790,7 +874,7 @@ export function EditorView() {
                       checked={pinned}
                       onChange={(e) => { setPinned(e.target.checked); scheduleSave(); }}
                     />
-                    <span className="text-sm">Pinned</span>
+                    <span className="text-sm">Angeheftet</span>
                   </label>
                 </div>
               </div>
@@ -807,88 +891,43 @@ export function EditorView() {
 
             {/* Main Content Area */}
             <div className="flex-1 flex min-h-0">
-              {coverageView && coverageReport ? (
-                // Coverage View
-                <div className="flex-1 p-4 overflow-auto min-h-0">
-                  <div className="max-w-3xl mx-auto space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-lg font-semibold">Coverage Analysis</h3>
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="sm" onClick={loadCoverage} disabled={coverageLoading}>
-                          <RefreshCw className={`h-3.5 w-3.5 mr-1 ${coverageLoading ? "animate-spin" : ""}`} />
-                          Refresh
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => setCoverageView(false)}>
-                          Back to Editor
-                        </Button>
-                      </div>
-                    </div>
-                    {coverageReport.propositions && (
-                      <>
-                        {/* Coverage Stats */}
-                        <div className="flex gap-2 flex-wrap">
-                          <Badge variant="default" className="text-sm">
-                            {(coverageReport.propositions.filter((p) => p.matched)?.length || 0)} covered
-                          </Badge>
-                          <Badge variant="destructive" className="text-sm">
-                            {(coverageReport.propositions.filter((p) => !p.matched)?.length || 0)} gaps
-                          </Badge>
-                          {coverageReport.conflicts?.length > 0 && (
-                            <Badge variant="secondary" className="text-sm">
-                              {coverageReport.conflicts.length} conflicts
-                            </Badge>
-                          )}
-                        </div>
-
-                        {/* Coverage Text */}
-                        <div className="border rounded p-4 bg-background font-mono text-sm leading-relaxed whitespace-pre-wrap">
-                          {coverageReport.coverage_html || "No coverage data"}
-                        </div>
-
-                        {/* Gaps */}
-                        {coverageReport.propositions.filter((p) => !p.matched).length > 0 && (
-                          <div>
-                            <h4 className="font-medium mb-2">Gaps</h4>
-                            <div className="space-y-2">
-                              {coverageReport.propositions.filter((p) => !p.matched).slice(0, 10).map((gap, i) => (
-                                <div key={i} className="border-l-2 border-red-500 pl-3 py-1">
-                                  <p className="text-sm">{gap.text}</p>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                </div>
-              ) : showPreview ? (
-                // Split Preview
-                <div className="flex-1 flex min-h-0 overflow-hidden">
-                  <div className="flex-1 flex flex-col min-h-0">
-                    <ObsidianEditor
-                      value={content}
-                      onChange={(newContent) => { setContent(newContent); scheduleSave(); }}
-                      onSelect={setSelection}
-                      placeholder="Write your notes here... Markdown supported"
-                      commandsRef={editorCommandsRef}
-                    />
-                  </div>
-                  <div className="w-px border-l bg-border" />
-                  <div className="flex-1 overflow-auto p-4 bg-background">
-                    <div
-                      className="prose prose-sm max-w-none prose-headings:font-semibold prose-code:bg-muted prose-code:px-1 prose-code:rounded prose-pre:bg-muted prose-pre:rounded"
-                      dangerouslySetInnerHTML={{ __html: markdownToHtml(content) }}
-                    />
-                  </div>
-                </div>
+              {coverageView ? (
+                // Coverage View (shared component)
+                <CoverageView
+                  title="Coverage Analysis"
+                  noteId={noteId}
+                  coverageReport={coverageReport}
+                  coverageLoading={coverageLoading}
+                  onRefresh={loadCoverage}
+                  onClose={() => setCoverageView(false)}
+                  onCardCreated={() => loadCards(noteId)}
+                  noteCards={cards}
+                  variant="editor"
+                  showHero={true}
+                  interactiveGaps={true}
+                  emptyMessage={'Run the analyzer to see what is covered by your cards.'}
+                />
+              ) : quizCoverageView ? (
+                // Quiz Knowledge Coverage
+                <QuizCoverageView
+                  noteId={noteId}
+                  onClose={() => setQuizCoverageView(false)}
+                  onCardCreated={() => loadCards(noteId)}
+                />
               ) : (
                 // Editor
                 <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
                   <ObsidianEditor
                     value={content}
                     onChange={(newContent) => { setContent(newContent); scheduleSave(); }}
-                    onSelect={setSelection}
+                    onSelect={(sel) => {
+                      // Only update state if selection actually changed meaningfully
+                      if (sel?.text && sel.text.trim()) {
+                        setSelection(sel);
+                      } else {
+                        setSelection(null);
+                      }
+                    }}
                     placeholder="Write your notes here... Markdown supported"
                     commandsRef={editorCommandsRef}
                   />
@@ -912,8 +951,16 @@ export function EditorView() {
                     <Button variant="ghost" size="sm" className="flex-1 text-xs" onClick={() => handleExport("apkg")}>APKG</Button>
                   </div>
 
-                  {/* New Card */}
+                  {/* New/Edit Card */}
                   <div className="p-3 border-b space-y-2">
+                    <div className="flex justify-between items-center bg-muted/40 p-1 mb-1 rounded">
+                      <span className="text-xs font-medium pl-1">{editingCardId ? "Edit Card" : "New Card"}</span>
+                      {editingCardId && (
+                        <Button variant="ghost" size="sm" className="h-5 px-2 text-[10px]" onClick={cancelEditingCard}>
+                          Cancel
+                        </Button>
+                      )}
+                    </div>
                     <select
                       value={newCardType}
                       onChange={(e) => setNewCardType(e.target.value)}
@@ -954,10 +1001,21 @@ export function EditorView() {
                       className="w-full px-2 py-1 border rounded text-sm bg-background"
                     />
                     <div className="flex gap-2">
-                      <Button size="sm" className="flex-1" onClick={handleAddCard}>Save</Button>
-                      <Button variant="outline" size="sm" onClick={() => { handleAddCard(); handlePushToAnki(); }}>
-                        Save & Push
-                      </Button>
+                      {editingCardId ? (
+                        <>
+                          <Button size="sm" className="flex-1" onClick={handleUpdateCard}>Update</Button>
+                          <Button variant="outline" size="sm" onClick={() => { handleUpdateCard().then(() => handlePushToAnki()); }}>
+                            Update & Push
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          <Button size="sm" className="flex-1" onClick={handleAddCard}>Save</Button>
+                          <Button variant="outline" size="sm" onClick={() => { handleAddCard().then(() => handlePushToAnki()); }}>
+                            Save & Push
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </div>
 
@@ -971,9 +1029,30 @@ export function EditorView() {
                               <p className="text-sm font-medium truncate">{card.front}</p>
                               {card.back && <p className="text-xs text-muted-foreground truncate">{card.back}</p>}
                             </div>
-                            <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => handleDeleteCard(card.id)}>
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
+                            <div className="flex gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 shrink-0"
+                                onClick={() => startEditingCard(card)}
+                                title="Edit card"
+                              >
+                                <Edit3 className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className={`h-6 w-6 shrink-0 ${
+                                  confirmDeleteCardId === card.id
+                                    ? "text-red-600 bg-red-100 hover:bg-red-200 dark:bg-red-900/40"
+                                    : ""
+                                }`}
+                                onClick={() => handleDeleteCard(card.id)}
+                                title={confirmDeleteCardId === card.id ? "Click again to confirm" : "Delete card"}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
                           </div>
                           <div className="flex gap-1 flex-wrap">
                             <Badge variant="outline" className="text-xs">{card.type}</Badge>
@@ -1015,6 +1094,14 @@ export function EditorView() {
                       className="h-7 text-xs"
                     >
                       <Lightbulb className="h-3.5 w-3.5 mr-1" /> Explain
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={aiMode === "generate" ? "secondary" : "ghost"}
+                      onClick={() => setAiMode("generate")}
+                      className="h-7 text-xs"
+                    >
+                      <Sparkles className="h-3.5 w-3.5 mr-1" /> Generate
                     </Button>
                   </div>
                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowAiPanel(false)}>
@@ -1122,6 +1209,33 @@ export function EditorView() {
                     )}
                   </div>
                 )}
+
+                {aiMode === "generate" && (
+                  <div className="flex-1 flex flex-col min-h-0 overflow-y-auto p-3 space-y-3">
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                        Source text
+                      </label>
+                      <textarea
+                        value={aiSourceText}
+                        onChange={(e) => setAiSourceText(e.target.value)}
+                        placeholder={selection?.text ? "Leave empty to use selected text" : "Leave empty to use entire note content"}
+                        rows={5}
+                        className="w-full px-2 py-1.5 border rounded text-sm bg-background resize-none"
+                        disabled={aiLoading}
+                      />
+                    </div>
+                    <Button
+                      size="sm"
+                      className="w-full"
+                      onClick={handleAiGenerate}
+                      disabled={aiLoading || !noteId}
+                    >
+                      {aiLoading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Sparkles className="h-4 w-4 mr-1" />}
+                      {aiLoading ? "Generating..." : "Generate Cards"}
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1148,7 +1262,7 @@ export function EditorView() {
             )}
 
             {/* Coverage Analysis Panel */}
-            {!coverageView && (
+            {!coverageView && !quizCoverageView && (
               <div className="border-t p-2 flex gap-2">
                 <Button variant="outline" size="sm" onClick={() => setShowCardDrawer(!showCardDrawer)}>
                   <Layers className="h-3.5 w-3.5 mr-1" />

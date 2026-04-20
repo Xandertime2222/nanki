@@ -9,16 +9,18 @@ import {
   ChevronLeft,
   ChevronRight,
   Edit3,
+  HelpCircle,
 } from "lucide-react";
 import { Button } from "./ui/button";
 
 const navItems = [
   { id: "editor", label: "Editor", icon: Edit3 },
-  { id: "workspace", label: "Workspace", icon: FolderOpen },
-  { id: "import", label: "Import", icon: Upload },
-  { id: "library", label: "Library", icon: Library },
-  { id: "analysis", label: "Analysis", icon: BarChart3 },
-  { id: "settings", label: "Settings", icon: Settings },
+  { id: "workspace", label: "Arbeitsbereich", icon: FolderOpen },
+  { id: "import", label: "Importieren", icon: Upload },
+  { id: "library", label: "Bibliothek", icon: Library },
+  { id: "analysis", label: "Analyse", icon: BarChart3 },
+  { id: "quiz", label: "Quiz", icon: HelpCircle },
+  { id: "settings", label: "Einstellungen", icon: Settings },
 ];
 
 export function AppSidebar() {
@@ -77,7 +79,7 @@ function BackendStatus() {
       />
       {sidebarOpen && (
         <span className="text-muted-foreground">
-          {backendStatus === "running" ? "Backend connected" : "Backend connecting..."}
+          {backendStatus === "running" ? "Backend verbunden" : "Backend verbindet…"}
         </span>
       )}
     </div>
